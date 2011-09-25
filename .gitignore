@@ -1,2 +1,4 @@
-Debug/*
-Release/*
+!*.h
+!*.cpp
+!*.cc
+!*.c
