@@ -1098,30 +1098,48 @@ LONG APIENTRY OpenSSL::MainProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 }
 */
 
-
-bool Thread::Start(ASYNC_CALLBACK cb){
+Thread* Thread::Create(THREAD_CALL cb){
+	Thread* p=new Thread();
+	p->Start(cb);
+	return p;
+}
+bool Thread::Start(THREAD_CALL cb){
 	unsigned int res;
-	call=cb;
-	hThread=(HANDLE)_beginthreadex(NULL,NULL,Callback,(LPVOID)this,NULL,&res);
+	hThread=(HANDLE)_beginthreadex(NULL,NULL,cb,(LPVOID)this,NULL,&res);
 	return true;
 }
 
-bool Thread::End(){
+void Thread::End(){
 	delete this;
-	return true;
 }
 
 
-THREAD_CALL Thread::Callback(void* cb){
-	return ((Thread*)cb)->Function_Call(cb);
+
+void Safe_Thread::Create(THREAD_CALL cb){
+	call=cb;
+	Thread::Create(Callback);
 }
 
-THREAD_CALL CALLBACK Thread::Function_Call(void* call){
-	((Thread*)call)->call(&inet);
+void Safe_Thread::End(){
+	if(thread!=NULL){
+		thread->End();
+		thread=NULL;
+	}
+}
+
+unsigned int CALLBACK Safe_Thread::Callback(void* cb){
+	return ((Safe_Thread*)cb)->Func_Call(cb);
+}
+
+
+unsigned int CALLBACK Safe_Thread::Func_Call(void* cb){
+	((THREAD_CALL)cb)(NULL);
 	End();
 	return 0;
 }
 
+
+/*
 bool Async::Start(ASYNC_CALLBACK cb){
 	unsigned int res;
 	call=cb;
@@ -1134,7 +1152,6 @@ bool Async::End(){
 	return true;
 }
 
-
 THREAD_CALL Async::Callback(void* ar){
 	return ((Async*)ar)->Async_func(ar);
 }
@@ -1144,7 +1161,7 @@ THREAD_CALL CALLBACK Async::Async_func(void* call){
 	End();
 	return 0;
 }
-
+*/
 /*
 bool Async::Start(){
 	m_socket=socket;

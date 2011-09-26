@@ -22,7 +22,7 @@ public:
 
 class User_Stream{
 private:
-	Thread *thread;
+	Safe_Thread *thread;
 	Inet inet;
 public:
 	

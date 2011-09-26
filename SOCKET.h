@@ -253,13 +253,14 @@ public:
 	bool Response(wstring*);
 };
 
-class Thread{
-#define THREAD_CALL unsigned int CALLBACK
+//typedef unsigned(CALLBACK* THREAD_CALL)(void*);
 
+class Thread{
+//#define THREAD_CALL unsigned int CALLBACK
+	typedef unsigned(CALLBACK* THREAD_CALL)(void*);
 private:
-	ASYNC_CALLBACK call;
-	Inet inet;
 	HANDLE hThread;
+private:
 	Thread(){};
 	Thread(Thread&){}
 	~Thread(){
@@ -269,19 +270,29 @@ private:
 
 public:
 
-	static Thread* Create(ASYNC_CALLBACK acb){
-		Thread* p=new Thread();
-		p->Start(acb);
-		return p;
-	}
-	bool Start(ASYNC_CALLBACK);
-	bool End();
-	static THREAD_CALL Callback(void*);
-	THREAD_CALL Function_Call(void*);
+	static Thread* Create(THREAD_CALL);
+	bool Start(THREAD_CALL);
+	void End();
 };
 
+class Safe_Thread{
+	typedef unsigned(CALLBACK* THREAD_CALL)(void*);
+private:
+	Thread* thread;
+	THREAD_CALL call;
+public:
+	Safe_Thread(){
+		thread=NULL;
+	}
+	void Create(THREAD_CALL cb);
+	void End();
+	static unsigned int CALLBACK Callback(void* cb);
+	unsigned int CALLBACK Func_Call(void* cb);
+};
+
+/*
 class Async{
-#define THREAD_CALL unsigned int CALLBACK
+//#define THREAD_CALL unsigned int CALLBACK
 
 private:
 	ASYNC_CALLBACK call;
@@ -303,6 +314,7 @@ public:
 	static THREAD_CALL Callback(void*);
 	THREAD_CALL Async_func(void*);
 };
+*/
 /*
 class Async:private Async{
 	Async(){
