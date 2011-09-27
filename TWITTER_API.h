@@ -19,15 +19,18 @@ public:
 };
 
 
-
+/*
 class User_Stream{
 private:
-	Safe_Thread *thread;
-	Inet inet;
+	Inet_Async inet_async;
+	Oauth oauth;
 public:
-	
-};
+	void Start();
+	static unsigned int CALLBACK Callback(void*);
+	unsigned CALLBACK Event_Function(void*);
 
+};
+*/
 
 
 #endif

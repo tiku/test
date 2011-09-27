@@ -105,6 +105,7 @@ bool Socket::Init(){
 
 bool Socket::Reset(){
 	if(m_sock!=NULL){
+		shutdown(m_sock,SD_BOTH);
 		closesocket(m_sock);
 		m_sock=NULL;
 		m_host.clear();
@@ -430,6 +431,7 @@ const wchar_t* Http_Bs::protocol=TEXT("http");
 
 bool Http_Bs::Connect(const wchar_t *host){
 	m_socket.Connect(host,GetProtocol());
+	closesocket(m_socket.GetSocket());
 	m_host=host;
 	return true;
 }
@@ -450,6 +452,30 @@ wchar_t* Http_Bs::GetProtocol(){
 
 wchar_t* Http_Bs::Protocol(){
 	return TEXT("http");
+}
+
+Https_Bs::Https_Bs(){
+	m_socket.Init();
+	ctx=NULL;
+	ssl=NULL;
+	m_host.clear();
+}
+
+Https_Bs::~Https_Bs(){
+	Reset();
+}
+
+void Https_Bs::Reset(){
+	m_socket.Reset();
+	if(ssl!=NULL){
+		SSL_shutdown(ssl);
+		SSL_free(ssl);
+		ssl=NULL;
+	}
+	if(ctx!=NULL){
+		SSL_CTX_free(ctx);
+		ctx=NULL;
+	}
 }
 
 bool Https_Bs::Connect(const wchar_t *host){
@@ -703,6 +729,7 @@ int Inet::Auto(const wchar_t*cmd,const wchar_t*url,PairDataArray head_pair,PairD
 	Request(cmd,path.c_str(),head_str.c_str(),content_str.c_str());
 	int sc_res=Response(content_res);
 	return sc_res;
+	//return 0;
 }
 
 bool Http::UrlSplit(const wchar_t*url,wstring*proto,wstring *host,wstring *path){
@@ -1098,46 +1125,41 @@ LONG APIENTRY OpenSSL::MainProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 }
 */
 
-Thread* Thread::Create(THREAD_CALL cb){
-	Thread* p=new Thread();
-	p->Start(cb);
-	return p;
-}
-bool Thread::Start(THREAD_CALL cb){
+
+
+void Inet_Async::Auto(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content,unsigned int CALLBACK cb(void*),void* arg){
 	unsigned int res;
-	hThread=(HANDLE)_beginthreadex(NULL,NULL,cb,(LPVOID)this,NULL,&res);
-	return true;
+	inet.Auto(cmd,url,head,content,NULL);
+
+}
+	
+void Inet_Async::Create(unsigned int CALLBACK cb(void*),void* arg){
+	unsigned int res;
+	hThread=(HANDLE)_beginthreadex(NULL,NULL,CallProc,this,NULL,&res);
 }
 
-void Thread::End(){
-	delete this;
+unsigned int CALLBACK Inet_Async::CallProc(void* arg){
+	return ((Inet_Async*)arg)->ThreadProc(NULL);
 }
 
+unsigned int CALLBACK Inet_Async::ThreadProc(void* arg){
+	/*wstring res;
+	HANDLE hEvent;
+	WSANETWORKEVENTS events;
 
-
-void Safe_Thread::Create(THREAD_CALL cb){
-	call=cb;
-	Thread::Create(Callback);
-}
-
-void Safe_Thread::End(){
-	if(thread!=NULL){
-		thread->End();
-		thread=NULL;
+	hEvent=WSACreateEvent();
+	WSAEventSelect(m_socket.GetSocket(),hEvent,FD_READ|FD_CONNECT|FD_CLOSE);
+	while(running){
+		if(WSAWaitForMultipleEvents(1,&hEvent,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
+			break;
+		}
+		WSAEnumNetworkEvents(m_socket.GetSocket(),hEvent,&events);
+		call(events.lNetworkEvents);
 	}
-}
-
-unsigned int CALLBACK Safe_Thread::Callback(void* cb){
-	return ((Safe_Thread*)cb)->Func_Call(cb);
-}
-
-
-unsigned int CALLBACK Safe_Thread::Func_Call(void* cb){
-	((THREAD_CALL)cb)(NULL);
-	End();
+	WSACloseEvent(hEvent);
+	_endthreadex(0);*/
 	return 0;
 }
-
 
 /*
 bool Async::Start(ASYNC_CALLBACK cb){

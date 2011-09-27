@@ -153,6 +153,12 @@ private:
 	SSL *ssl;
 	wstring m_host;
 public:
+	Https_Bs();
+	~Https_Bs();
+
+	void Init();
+	void Reset();
+
 	bool Connect(const wchar_t*);
 	bool Send(const wchar_t*,int);
 	bool Recv(wstring*);
@@ -255,39 +261,22 @@ public:
 
 //typedef unsigned(CALLBACK* THREAD_CALL)(void*);
 
-class Thread{
-//#define THREAD_CALL unsigned int CALLBACK
-	typedef unsigned(CALLBACK* THREAD_CALL)(void*);
+
+class Inet_Async{
 private:
+	bool running;
+	Socket m_socket;
 	HANDLE hThread;
-private:
-	Thread(){};
-	Thread(Thread&){}
-	~Thread(){
-		CloseHandle(hThread);
-		_endthreadex(0);
-	}
+	Inet inet;
 
+	void* arg;
+	unsigned int CALLBACK call(void*);
 public:
+	void Auto(const wchar_t*,const wchar_t*,PairDataArray,PairDataArray,unsigned int CALLBACK(void*),void*);
+	void Create(unsigned int CALLBACK(void*),void*);
+	static unsigned int CALLBACK CallProc(void*);
+	unsigned int CALLBACK ThreadProc(void*);
 
-	static Thread* Create(THREAD_CALL);
-	bool Start(THREAD_CALL);
-	void End();
-};
-
-class Safe_Thread{
-	typedef unsigned(CALLBACK* THREAD_CALL)(void*);
-private:
-	Thread* thread;
-	THREAD_CALL call;
-public:
-	Safe_Thread(){
-		thread=NULL;
-	}
-	void Create(THREAD_CALL cb);
-	void End();
-	static unsigned int CALLBACK Callback(void* cb);
-	unsigned int CALLBACK Func_Call(void* cb);
 };
 
 /*
