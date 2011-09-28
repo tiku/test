@@ -19,18 +19,20 @@ public:
 };
 
 
-/*
+
 class User_Stream{
 private:
-	Inet_Async inet_async;
+	//Inet_Async inet_async;
+	//Inet_Async_Create iac;
 	Oauth oauth;
 public:
 	void Start();
-	static unsigned int CALLBACK Callback(void*);
-	unsigned CALLBACK Event_Function(void*);
+	//void Start2(){iac.Start();}
+	//static unsigned int CALLBACK Callback(void*);
+//	unsigned CALLBACK Event_Function(void*);
 
 };
-*/
+
 
 
 #endif

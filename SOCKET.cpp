@@ -82,50 +82,40 @@ void PairDataArray::Sort(){
 	}
 }
 
-
-Socket::Socket(){
-	Init();
-}
-Socket::~Socket(){
-	End();
-}
-
-bool Socket::Init(){
-	WSADATA WsaData;
-	
-	if(WSAStartup(WS_VERSION,&WsaData)!=0){
-		MessageBox(NULL,TEXT("WINSOCK初期化に失敗しました"),NULL,MB_OK);
-		return false;
+Socket_Base::Socket_Base(){
+	WSADATA wsadata;
+	if(WSAStartup(WS_VERSION,&wsadata)!=0){
+		MessageBox(NULL,TEXT("WINSOCKの初期化失敗"),NULL,MB_OK);
 	}
 	m_sock=NULL;
 	m_host.clear();
-
-	return true;
 }
 
-bool Socket::Reset(){
+Socket_Base::~Socket_Base(){
+	Com_Reset();
+	WSACleanup();
+}
+
+SOCKET Socket_Base::GetSocket(){
+	return m_sock;
+}
+
+void Socket_Base::Com_Reset(){
 	if(m_sock!=NULL){
 		shutdown(m_sock,SD_BOTH);
 		closesocket(m_sock);
 		m_sock=NULL;
-		m_host.clear();
 	}
-	return true;
+	m_host.clear();
 }
 
-bool Socket::End(){
-	Reset();
-	WSACleanup();
-	return true;
-}
-
-bool Socket::Connect(const wchar_t* host,const wchar_t* serv){
+bool Socket_Base::Com_Connect(const wchar_t* host,const wchar_t* serv){
 	ADDRINFOW hints;
 	ADDRINFOW *addrinfo;
 	wchar_t* port[17];//SHORTの最大値16bit+終端文字1bit;
 	wchar_t* proto=TEXT("tcp");
 
-	Reset();
+	Com_Reset();
 
 	memset(&hints,0,sizeof(hints));//必ず初期化する
 
@@ -152,144 +142,298 @@ EXIT://エラーの場合
 	return false;
 }
 
-SOCKET Socket::GetSocket(){
-	return m_sock;
+
+bool Def_Socket::Connect(const wchar_t* host){
+	return Com_Connect(host,TEXT("http"));
 }
 
-wchar_t* Socket::GetHost(){
-	return (wchar_t*)m_host.c_str();
+
+int Def_Socket::Send(const wchar_t* w_send,int size){
+	string m_send;
+	WideToMultiChar(w_send,size,&m_send);
+	return send(m_sock,m_send.c_str(),size,0);
 }
 
-int Socket::Send(const wchar_t* msg,int length,int flag){
-	string sendstr;
-	WideToMultiChar(msg,length,&sendstr);
-	return send(m_sock,(char*)sendstr.c_str(),length,flag);
-}
-
-int Socket::Recv(wstring* res,int flag){
+int Def_Socket::Recv(wstring* res){
 	char tmp[MAX_RECV]={0};
-	wstring::size_type rlen;
 	int len,prev=0;
-	rlen=0;
 	wstring wtmp;
+
 	res->clear();
 	do{
-		len=recv(m_sock,(char*)tmp,MAX_RECV,flag);
+		len=recv(m_sock,(char*)tmp,MAX_RECV,0);
 		//勢い
 		res->resize(len+prev);
 		prev+=MultiByteToWideChar(CP_UTF8,NULL,tmp,len,(wchar_t*)res->c_str()+prev,len);
-		//MultiToWideChar(tmp,len,&wtmp);
-		//res->append(wtmp);
-		//res->resize(rlen+MultiByteToWideChar(CP_UTF8,NULL,tmp,MAX_RECV,0,0)+1);
-		//rlen+=MultiByteToWideChar(CP_UTF8,NULL,tmp,MAX_RECV,(wchar_t*)res->c_str()+rlen,res->capacity()-rlen);
 		memset(&tmp,0,sizeof(tmp));
 	}while(len==MAX_RECV);
 	return len;
 }
-/*
-bool Http::UrlSplit(const wchar_t*url,wstring*proto,wstring *host,wstring *path){
-	wchar_t* pcp;
-	wchar_t *cproto,*chost,*cpath;
-	cproto=chost=wcsstr((wchar_t*)url,TEXT("://"));
-	chost+=lstrlen(TEXT("://"));
-	cpath=wcschr(chost,'/');
-	
-	proto->assign(url,cproto-url);
-	host->assign(chost,cpath-chost);
-	path->assign(cpath);
+
+SSL_Socket::SSL_Socket(){
+	ssl=NULL;
+	ctx=NULL;
+}
+
+SSL_Socket::~SSL_Socket(){
+	SSL_Reset();
+}
+
+void SSL_Socket::SSL_Reset(){
+	if(ssl!=NULL){
+		SSL_shutdown(ssl);
+		SSL_free(ssl);
+		ssl=NULL;
+	}
+	if(ctx!=NULL){
+		SSL_CTX_free(ctx);
+		ctx=NULL;
+	}
+}
+
+bool SSL_Socket::Connect(const wchar_t* host){
+	int i,err;
+	Com_Connect(host,TEXT("https"));
+
+	SSL_Reset();
+
+	SSL_library_init();
+	SSL_load_error_strings();
+
+	ctx=SSL_CTX_new(SSLv23_client_method());
+	i=SSL_CTX_load_verify_locations(ctx,NULL,"./BuiltinObjectToken-VerisignClass3PublicPrimaryCertificationAuthority-G2.cer");
+	SSL_CTX_set_verify_depth(ctx,SSL_VERIFY_PEER);
+
+	ssl=SSL_new(ctx);
+	SSL_set_fd(ssl,m_sock);
+	err=SSL_connect(ssl);
+	if(err!=1){
+		MessageBox(NULL,TEXT("SSL_connect Error"),TEXT("ERROR"),MB_OK);
+		return false;
+	}
 	return true;
 }
-//URLエンコード（Perlで書きたいなあ...ワイド文字使いたいなあ...）
-bool Http::UrlEncode(const wchar_t*url,wstring *res){
-	int i,len;
-	wstring dest;
-	TCHAR ch;
-	wchar_t tmp[4];
-	len=lstrlen(url);
-	dest.clear();
-	//効率悪いような…
-	for(i=0;i<len;i++){
-		//そのまま
-		ch=url[i];
-		if(isalnum(ch)||ch=='_'||ch=='-'||ch=='.'){
-			dest.append((wchar_t*)&ch,1);
-		}else if(ch==' '){//空白は+へ変換
-			dest.append(TEXT("+"));
-		}else{//大変かとおもいきやsprintfでいけた
-			wsprintf(tmp,TEXT("%%%02X"),ch);//(unsigned wchar_t*にしないとバグる)
-			dest.append(tmp);
+
+int SSL_Socket::Send(const wchar_t* w_send,int size){
+	string m_send;
+	WideToMultiChar(w_send,size,&m_send);
+	return SSL_write(ssl,m_send.c_str(),m_send.size());
+}
+
+int SSL_Socket::Recv(wstring* res){
+	int total_readed=0;
+	res->clear();
+	while(1){
+		char buf[MAX_RECV];
+		int read_size;
+
+		read_size=SSL_read(ssl,buf,sizeof(buf)-1);
+		res->resize(total_readed+read_size);
+		total_readed+=MultiByteToWideChar(CP_UTF8,NULL,buf,read_size,(wchar_t*)res->c_str()+total_readed,read_size);
+		if(read_size>0){
+			buf[read_size]=0;
+		}else{
+			break;
 		}
 	}
-	res->assign(dest);
 	return true;
 }
 
-void Http::GetHeadStr(vector<PairData> head,wstring *res){
-	int i;
-	res->clear();
-	for(i=0;i<head.size();i++){
-		res->append(head[i].key).append(TEXT(":")).append(head[i].data).append(TEXT("\r\n"));
-	}
-	return;
+
+Socket::Socket(){
+	m_socket=NULL;
 }
 
-void Http::GetContentStr(vector<PairData> content,wstring *res){
-	int i;
-	res->clear();
-	for(i=0;i<content.size();i++){
-		res->append(content[i].key).append(TEXT("=")).append(content[i].data).append(TEXT("&"));
+Socket::~Socket(){
+	Reset();
+}
+
+void Socket::Reset(){
+	if(m_socket!=NULL){
+		delete m_socket;
+		m_socket=NULL;
 	}
-	return;
+}
+
+bool Socket::Connect(const wchar_t* host,const wchar_t* proto){
+	Reset();
+
+	if(wcscmp(proto,TEXT("http"))==0){
+		m_socket=new Def_Socket();
+	}else if(wcscmp(proto,TEXT("https"))==0){
+		m_socket=new SSL_Socket();
+	}
+	return m_socket->Connect(host);
+}
+
+int Socket::Send(const wchar_t* send,int size){
+	return m_socket->Send(send,size);
+}
+
+int Socket::Recv(wstring* res){
+	return m_socket->Recv(res);
 }
 
 
-bool Http::Send(const wchar_t* cmd,const wchar_t* url,vector<PairData> head,vector<PairData> content){
-	int i,clen;
-	PairData host_head,connect_head,contlen_head,ua;
+
+Inet_Async::~Inet_Async(){
+	running=false;
+	WSASetEvent(0);
+	WaitForSingleObject(m_hThread,INFINITE);
+	//WaitForSingleObject(m_hThread,INFINITE);
+}
+
+bool Inet_Async::Connect(const wchar_t* host,const wchar_t* proto){
+	m_socket=new SSL_Socket;
+	return m_socket->Connect(host);
+}
+
+bool Inet_Async::Request(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content){
+	Http_Func func;
 	wstring proto,host,path;
-	wstring send_str,head_str,content_str;
+	wstring head_str,content_str,send;
 
-	UrlSplit(url,&proto,&host,&path);
-	UrlEncode(host.c_str(),&host);
-	UrlEncode(path.c_str(),&path);
-	//if(m_host!=host){
-		if(!m_socket.Connect(host.c_str(),proto.c_str())){
-			return false;
-		}
-	//}
-	m_host=host;
-	send_str.append(cmd).append(TEXT(" ")).append(url).append(TEXT(" HTTP/1.1\r\n"));
-	m_socket.Send(send_str.c_str(),send_str.size(),0);
+	func.UrlSplit(url,&proto,&host,&path);
 
-	head.insert(head.begin(),host_head.Set(TEXT("Host"),host.c_str()));
-	GetHeadStr(head,&head_str);
-	m_socket.Send(head_str.c_str(),head_str.size(),NULL);
+	Connect(host.c_str(),proto.c_str());
+	func.HeaderJoin(head,&head_str);
+	func.ContentJoin(content,&content_str);
 
-	GetContentStr(content,&content_str);
-	m_socket.Send(content_str.c_str(),content_str.size(),NULL);
+	func.GetRequestString(cmd,url,head_str.c_str(),content_str.c_str(),&send);
+	m_socket->Send(send.c_str(),send.size());
 
-	send_str.assign(TEXT("\r\n\r\n"));
-	m_socket.Send(send_str.c_str(),send_str.size(),0);
+	wstring aaa;
+	m_socket->Recv(&aaa);
 	return true;
 }
 
-bool Http::Recv(wstring *status,wstring* header,wstring* body){
-	int i,delim_index,begin,end;
+
+void Inet_Async::Start(){
+	unsigned int res;
+	if(suspend){
+		SetEvent(hEv2);
+		suspend=false;
+		return;
+	}
+	running=true;
+
+	hEv2=CreateEvent(NULL,TRUE,FALSE,TEXT("AAA"));
+	Function();
+//	m_hThread=(HANDLE)_beginthreadex(NULL,NULL,CallProc,this,NULL,&res);
+	return;
+}
+
+void Inet_Async::Stop(){
+	SetEvent(hEv2);
+	suspend=true;
+	return;
+	running=false;
+	WSASetEvent(0);
+	WaitForSingleObject(m_hThread,INFINITE);
+}
+
+void Inet_Async::End(){
+}
+
+unsigned int CALLBACK Inet_Async::CallProc(void* arg){
+	return ((Inet_Async*)arg)->ThreadProc(arg);
+}
+
+unsigned int CALLBACK Inet_Async::ThreadProc(void* arg){
 	wstring res;
-	m_socket.Recv(&res,0);
-	begin=0;
-	end=res.find(TEXT("\r\n"),begin)+lstrlen(TEXT("\r\n"));
-	status->append(res,begin,end-begin);
-	begin=end;
-	end=res.find(TEXT("\r\n\r\n"),begin)+lstrlen(TEXT("\r\n\r\n"));
-	header->append(res,begin,end-begin);
-	begin=end;
-	end=res.size();
-	body->append(res,begin,end-begin);
-	
+	//HANDLE hEvent;
+	WSANETWORKEVENTS events;
+
+	hEvent=WSACreateEvent();
+	WSAEventSelect(m_socket->GetSocket(),hEvent,FD_READ|FD_CONNECT|FD_CLOSE);
+	while(running){
+		if(WSAWaitForMultipleEvents(1,&hEvent,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
+			break;
+		}
+		WSAEnumNetworkEvents(m_socket->GetSocket(),hEvent,&events);
+		switch(events.lNetworkEvents){
+		case FD_CONNECT:
+			break;
+		case FD_CLOSE:
+			break;
+		case FD_READ:
+			m_socket->Recv(&res);
+			break;
+		}
+	}
+	WSACloseEvent(hEvent);
+
+//	CloseHandle(m_hThread);
+//	_endthreadex(0);
 	return true;
 }
-*/
+
+void Inet_Async::Function(){
+	wstring res;
+	//HANDLE hEvent;
+	WSANETWORKEVENTS events;
+
+	hEvent=WSACreateEvent();
+	WSAEventSelect(m_socket->GetSocket(),hEvent,FD_READ|FD_CLOSE);
+
+	suspend=false;
+	while(running){
+		if(suspend){
+			WaitForSingleObject(hEv2,INFINITE);
+			continue;
+		}
+		if(WSAWaitForMultipleEvents(1,&hEvent,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
+			break;
+		}
+		WSAEnumNetworkEvents(m_socket->GetSocket(),hEvent,&events);
+		switch(events.lNetworkEvents){
+		case FD_CLOSE:
+			break;
+		case FD_READ:
+			m_socket->Recv(&res);
+			break;
+		}
+	}
+	WSACloseEvent(hEvent);
+}
+
+Inet_Async_Create::~Inet_Async_Create(){
+}
+
+
+void Inet_Async_Create::Create(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content){
+	unsigned int res;
+	a=cmd;
+	b=url;
+	c=head;
+	d=content;
+		ia.Request(a.c_str(),b.c_str(),c,d);
+	ia.Start();
+	//m_hThread=(HANDLE)_beginthreadex(NULL,NULL,cb,this,NULL,&res);
+}
+
+void Inet_Async_Create::Stop(){
+	ia.Stop();
+	//SuspendThread(m_hThread);
+}
+
+void Inet_Async_Create::Start(){
+	ia.Start();
+}
+
+
+unsigned int Inet_Async_Create::cb(void* arg){
+	return ((Inet_Async_Create*)arg)->proc(NULL);
+}
+
+unsigned int Inet_Async_Create::proc(void* arg){
+	ia.Request(a.c_str(),b.c_str(),c,d);
+	ia.Start();
+	CloseHandle(m_hThread);
+	_endthreadex(0);
+	return 0;
+}
+
 
 
 bool Http_Func::GetRequestString(
@@ -328,7 +472,7 @@ bool Http_Func::GetRequestString(const wchar_t* cmd,const wchar_t* url,const wch
 #define HTTP_VERSION_TEXT TEXT("HTTP/1.1")
 	wstring host,a,b;
 	bool get=false;
-	if(cmd==TEXT("GET")||cmd==TEXT("HEAD")){
+	if(wcscmp(cmd,TEXT("GET"))==0||wcscmp(cmd,TEXT("HEAD"))==0){
 		get=true;
 	}
 	res->clear();
@@ -427,175 +571,20 @@ void Http_Func::ContentJoin(PairDataArray pairs,wstring* res){
 	return;
 }
 
-const wchar_t* Http_Bs::protocol=TEXT("http");
-
-bool Http_Bs::Connect(const wchar_t *host){
-	m_socket.Connect(host,GetProtocol());
-	closesocket(m_socket.GetSocket());
-	m_host=host;
-	return true;
-}
-
-bool Http_Bs::Send(const wchar_t* msg,int size){
-	m_socket.Send(msg,size,0);
-	return true;
-}
-
-bool Http_Bs::Recv(wstring* res){
-	m_socket.Recv(res,0);
-	return true;
-}
-
-wchar_t* Http_Bs::GetProtocol(){
-	return TEXT("http");
-}
-
-wchar_t* Http_Bs::Protocol(){
-	return TEXT("http");
-}
-
-Https_Bs::Https_Bs(){
-	m_socket.Init();
-	ctx=NULL;
-	ssl=NULL;
-	m_host.clear();
-}
-
-Https_Bs::~Https_Bs(){
-	Reset();
-}
-
-void Https_Bs::Reset(){
-	m_socket.Reset();
-	if(ssl!=NULL){
-		SSL_shutdown(ssl);
-		SSL_free(ssl);
-		ssl=NULL;
-	}
-	if(ctx!=NULL){
-		SSL_CTX_free(ctx);
-		ctx=NULL;
-	}
-}
-
-bool Https_Bs::Connect(const wchar_t *host){
-	int i,err,s;
-	DWORD res;
-	long VeryErr;
-
-	m_socket.Connect(host,GetProtocol());
-	m_host=host;
-
-	SSL_library_init();
-	SSL_load_error_strings();
-
-	ctx=SSL_CTX_new(SSLv23_client_method());
-	i=SSL_CTX_load_verify_locations(ctx,NULL,"./BuiltinObjectToken-VerisignClass3PublicPrimaryCertificationAuthority-G2.cer");
-	SSL_CTX_set_verify_depth(ctx,SSL_VERIFY_PEER);
-
-	ssl=SSL_new(ctx);
-	SSL_set_fd(ssl,m_socket.GetSocket());
-	err=SSL_connect(ssl);
-	if(err!=1){
-		MessageBox(NULL,TEXT("SSL_connect Error"),TEXT("ERROR"),MB_OK);
-		return false;
-	}
-	/*
-	X509 *server_cert;
-	char msg[1000];
-	char *str;
-
-	SSL_SESSION *ssi=SSL_get_session(ssl);
-
-	server_cert=SSL_get_peer_certificate(ssl);
-
-	str=X509_NAME_oneline(X509_get_subject_name(server_cert),NULL,NULL);
-
-	sprintf(msg,"Subject:%s",str);
-	MessageBoxA(NULL,msg,NULL,MB_OK);
-
-	str=X509_NAME_oneline(X509_get_issuer_name(server_cert),NULL,NULL);
-
-	sprintf(msg,"Issuer:%s",str);
-	MessageBoxA(NULL,msg,NULL,MB_OK);
-
-	VeryErr=SSL_get_verify_result(ssl);
-	
-	if(VeryErr==X509_V_OK){
-		MessageBoxA(NULL,"Verify_OK!",NULL,MB_OK);
-	}else{
-		sprintf(msg,"%d",VeryErr);
-
-		MessageBoxA(NULL,msg,NULL,MB_OK);
-	}
-	*/
-	return true;
-}
-
-bool Https_Bs::Send(const wchar_t* msg,int size){
-	string m_msg;
-	WideToMultiChar(msg,size,&m_msg);
-	SSL_write(ssl,m_msg.c_str(),m_msg.size());
-	return true;
-}
-
-bool Https_Bs::Recv(wstring *res){
-	int total_readed=0;
-	res->clear();
-	while(1){
-		char buf[100];
-		int read_size;
-
-		read_size=SSL_read(ssl,buf,sizeof(buf)-1);
-		res->resize(total_readed+read_size);
-		total_readed+=MultiByteToWideChar(CP_UTF8,NULL,buf,read_size,(wchar_t*)res->c_str()+total_readed,read_size);
-		if(read_size>0){
-			buf[read_size]=0;
-		}else{
-			break;
-		}
-	}
-	return true;
-}
-
-wchar_t* Https_Bs::GetProtocol(){
-	return TEXT("https");
-}
-
-wchar_t* Https_Bs::Protocol(){
-	return TEXT("https");
-}
 
 Inet::Inet(){
-	Init();
-}
-
-Inet::~Inet(){
-	Reset();
-}
-
-void Inet::Init(){
-	m_http=NULL;
 	m_host=TEXT("");
 	m_response=TEXT("");
 }
 
+Inet::~Inet(){};
 
-void Inet::Reset(){
-	if(m_http!=NULL){
-		delete m_http;
-	}
-	Init();
-}
+
 
 bool Inet::Connect(const wchar_t* host,const wchar_t* proto){
-
-	if(wcscmp(proto,Http_Bs::Protocol())==0){
-		m_http=new Http_Bs;
-	}else if(wcscmp(proto,Https_Bs::Protocol())==0){
-		m_http=new Https_Bs;
+	if(!m_socket.Connect(host,proto)){
+		return false;
 	}
-	m_http->Connect(host);
 	m_host=host;
 	return true;
 }
@@ -605,10 +594,18 @@ bool Inet::Async_Connect(const wchar_t* host){
 	return true;
 }
 
-bool Inet::Request(const wchar_t* cmd,const wchar_t* path,const wchar_t* head,const wchar_t* content){
+bool Inet::Request(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content){
 	wstring res;
-	m_func.GetRequestString(cmd,m_http->GetProtocol(),m_host.c_str(),path,head,content,&res);
-	m_http->Send(res.c_str(),res.size());
+	wstring  head_str,content_str;
+
+	
+	//SetDefaultHeader(&head);
+	
+	m_func.HeaderJoin(head,&head_str);
+	m_func.ContentJoin(content,&content_str);
+
+	m_func.GetRequestString(cmd,url,head_str.c_str(),content_str.c_str(),&res);
+	m_socket.Send(res.c_str(),res.size());
 
 	return true;
 }
@@ -617,7 +614,7 @@ int Inet::Response(wstring* res){
 	wstring status,head,content;
 	int scode;
 	PairDataArray head_data;
-	m_http->Recv(&m_response);
+	m_socket.Recv(&m_response);
 	ResponseSplit(m_response.c_str(),&status,&head,&content);
 	
 	if(!StatusCodeAnalysis(status.c_str(),&scode)){
@@ -627,7 +624,7 @@ int Inet::Response(wstring* res){
 		return false;
 	}
 	if(wcscmp(head_data[TEXT("Connection")],TEXT("Keep-Alive"))!=0){
-		Reset();
+		//Reset();
 	}
 	*res=content;
 	return scode;
@@ -717,416 +714,14 @@ bool Inet::SetDefaultHeader(PairDataArray* head){
 
 
 int Inet::Auto(const wchar_t*cmd,const wchar_t*url,PairDataArray head_pair,PairDataArray content_pair,wstring* content_res){
-	wstring proto,host,path,head_str,content_str;
-	m_func.UrlSplit(url,&proto,&host,&path);
-
-	if(m_host!=host.c_str()){
-		Connect(host.c_str(),proto.c_str());
-	}
-	SetDefaultHeader(&head_pair);
-	m_func.HeaderJoin(head_pair,&head_str);
-	m_func.ContentJoin(content_pair,&content_str);
-	Request(cmd,path.c_str(),head_str.c_str(),content_str.c_str());
+	Request(cmd,url,head_pair,content_pair);
 	int sc_res=Response(content_res);
 	return sc_res;
 	//return 0;
 }
 
-bool Http::UrlSplit(const wchar_t*url,wstring*proto,wstring *host,wstring *path){
-	wchar_t* pcp;
-	wchar_t *cproto,*chost,*cpath;
-	cproto=wcsstr((wchar_t*)url,TEXT("://"));
-	if(cproto==NULL){
-		return false;
-	}
-	
-	chost=cproto+lstrlen(TEXT("://"));
-	cpath=wcschr(chost,'/');
-	
-	proto->assign(url,cproto-url);
-	host->assign(chost,cpath-chost);
-	path->assign(cpath);
-	return true;
-}
-//URLエンコード（Perlで書きたいなあ...ワイド文字使いたいなあ...）←ワイド文字使いました＾＾
-bool Http::UrlEncode(const wchar_t*url,wstring *res){
-	int i,len;
-	wstring dest;
-	TCHAR ch;
-	wchar_t tmp[4];
-	len=lstrlen(url);
-	dest.clear();
-	//効率悪いような…
-	for(i=0;i<len;i++){
-		//そのまま
-		ch=url[i];
-		if(isalnum(ch)||ch=='_'||ch=='-'||ch=='.'){
-			dest.append((wchar_t*)&ch,1);
-		}else if(ch==' '){//空白は+へ変換
-			dest.append(TEXT("+"));
-		}else{//大変かとおもいきやsprintfでいけた
-			wsprintf(tmp,TEXT("%%%02X"),ch);//(unsigned wchar_t*にしないとバグる)
-			dest.append(tmp);
-		}
-	}
-	res->assign(dest);
-	return true;
-}
 
-void Http::GetHeadStr(vector<PairData> head,wstring *res){
-	int i;
-	res->clear();
-	for(i=0;i<head.size();i++){
-		res->append(head[i].key).append(TEXT(":")).append(head[i].data).append(TEXT("\r\n"));
-	}
-	return;
-}
-
-void Http::GetContentStr(vector<PairData> content,wstring *res){
-	int i;
-	res->clear();
-	for(i=0;i<content.size();i++){
-		res->append(content[i].key).append(TEXT("=")).append(content[i].data).append(TEXT("&"));
-	}
-	return;
-}
-
-
-bool Http::Send(const wchar_t* cmd,const wchar_t* url,vector<PairData> head,vector<PairData> content){
-	int i,clen;
-	PairData host_head,connect_head,contlen_head,ua;
-	wstring proto,host,path;
-	wstring send_str,head_str,content_str;
-
-	UrlSplit(url,&proto,&host,&path);
-	UrlEncode(host.c_str(),&host);
-	UrlEncode(path.c_str(),&path);
-	//if(m_host!=host){
-		if(!m_socket.Connect(host.c_str(),proto.c_str())){
-			return false;
-		}
-	//}
-	m_host=host;
-	send_str.append(cmd).append(TEXT(" ")).append(url).append(TEXT(" HTTP/1.1\r\n"));
-	m_socket.Send(send_str.c_str(),send_str.size(),0);
-
-	head.insert(head.begin(),host_head.Set(TEXT("Host"),host.c_str()));
-	GetHeadStr(head,&head_str);
-	m_socket.Send(head_str.c_str(),head_str.size(),NULL);
-
-	GetContentStr(content,&content_str);
-	m_socket.Send(content_str.c_str(),content_str.size(),NULL);
-
-	send_str.assign(TEXT("\r\n\r\n"));
-	m_socket.Send(send_str.c_str(),send_str.size(),0);
-	return true;
-}
-
-bool Http::Recv(wstring *status,wstring* header,wstring* body){
-	int i,delim_index,begin,end;
-	wstring res;
-	m_socket.Recv(&res,0);
-	begin=0;
-	end=res.find(TEXT("\r\n"),begin)+lstrlen(TEXT("\r\n"));
-	status->append(res,begin,end-begin);
-
-	begin=end;
-	end=res.find(TEXT("\r\n\r\n"),begin)+lstrlen(TEXT("\r\n\r\n"));
-	header->append(res,begin,end-begin);
-
-	begin=end;
-	end=res.size();
-	body->append(res,begin,end-begin);
-	
-	return true;
-}
-
-bool Http::Response(wstring *res){
-	m_socket.Recv(res,NULL);
-	return true;
-}
-
-bool Http::Request(const wchar_t* cmd,const wchar_t* path,const wchar_t* head,const wchar_t* content){
-	wstring req;
-	func.GetRequestString(cmd,TEXT("http"),m_host.c_str(),path,head,content,&req);
-	m_socket.Send(req.c_str(),req.size(),NULL);
-	return true;
-}
-
-
-bool OpenSSL::Connect(const wchar_t* host){
-	int i,err,s;
-	DWORD res;
-	long VeryErr;
-	Init();
-	//SSL_CTX *ctx;
-	//SSL *ssl;
-	
-
-	m_socket.Connect(host,TEXT("https"));
-	/*
-	if(m_bAsync){
-		HANDLE hEvent;
-		WSANETWORKEVENTS events;
-
-		hEvent=WSACreateEvent();
-		WSAEventSelect(m_socket.GetSocket(),hEvent,FD_READ|FD_CONNECT|FD_CLOSE);
-		WSAWaitForMultipEvents(1,&hEvent,FALSE,SOCKET_CONNECT_TIMEOUT,FALSE);
-		WSAEnumNetworkEvents(m_socket.GetSocket(),hEvent,&events);
-		/*fd_set fds;
-		FD_ZERO(&fds);
-		FD_SET(m_socket.GetSocket(),&fds);*/
-	//}
-
-	SSL_library_init();
-	SSL_load_error_strings();
-
-	ctx=SSL_CTX_new(SSLv23_client_method());
-	i=SSL_CTX_load_verify_locations(ctx,NULL,"./BuiltinObjectToken-VerisignClass3PublicPrimaryCertificationAuthority-G2.cer");
-	SSL_CTX_set_verify_depth(ctx,SSL_VERIFY_PEER);
-
-	ssl=SSL_new(ctx);
-	SSL_set_fd(ssl,m_socket.GetSocket());
-	err=SSL_connect(ssl);
-	if(err!=1){
-		MessageBox(NULL,TEXT("SSL_connect Error"),TEXT("ERROR"),MB_OK);
-		return false;
-	}
-	/*
-	X509 *server_cert;
-	char msg[1000];
-	char *str;
-
-	SSL_SESSION *ssi=SSL_get_session(ssl);
-
-	server_cert=SSL_get_peer_certificate(ssl);
-
-	str=X509_NAME_oneline(X509_get_subject_name(server_cert),NULL,NULL);
-
-	sprintf(msg,"Subject:%s",str);
-	MessageBoxA(NULL,msg,NULL,MB_OK);
-
-	str=X509_NAME_oneline(X509_get_issuer_name(server_cert),NULL,NULL);
-
-	sprintf(msg,"Issuer:%s",str);
-	MessageBoxA(NULL,msg,NULL,MB_OK);
-
-	VeryErr=SSL_get_verify_result(ssl);
-	
-	if(VeryErr==X509_V_OK){
-		MessageBoxA(NULL,"Verify_OK!",NULL,MB_OK);
-	}else{
-		sprintf(msg,"%d",VeryErr);
-
-		MessageBoxA(NULL,msg,NULL,MB_OK);
-	}
-	*/
-	WideToMultiChar(host,lstrlen(host),&m_host);
-	return true;
-}
-
-bool OpenSSL::Request(const wchar_t* cmd,const wchar_t* path,const wchar_t* head,const wchar_t* content){
-	string m_request,cmd_mb,path_mb,head_mb,content_mb;
-
-	wstring w_request;
-	//func.GetRequestString(cmd,TEXT("https"),m_host.c_str(),path,head,content,&w_request);
-
-	//WideToMultiChar(w_request.c_str(),w_request.size()&m_request);
-	SSL_write(ssl,(char*)m_request.c_str(),m_request.size());
-	return true;
-}
-
-bool OpenSSL::Response(wstring *res){
-	int total_readed=0;
-	res->clear();
-	while(1){
-		char buf[100];
-		int read_size;
-
-		read_size=SSL_read(ssl,buf,sizeof(buf)-1);
-		res->resize(total_readed+read_size);
-		total_readed+=MultiByteToWideChar(CP_UTF8,NULL,buf,read_size,(wchar_t*)res->c_str()+total_readed,read_size);
-		if(read_size>0){
-			buf[read_size]=0;
-		}else{
-			break;
-		}
-	}
-	return true;
-}
-
-
-bool OpenSSL::Async(ASYNC_CALLBACK callback){
-	unsigned int res;
-	call.callback=callback;
-	call.pthis=this;
-	hThread=(HANDLE)_beginthreadex(NULL,NULL,Async_Call,(LPVOID)&call,NULL,&res);
-	return true;
-}
-
-unsigned int CALLBACK OpenSSL::Async_Call(LPVOID data){
-	struct CALL* tmp=(CALL*)data;
-	//return tmp->pthis->Async_Response(tmp->callback);
-	return tmp->pthis->Async_Response(tmp);
-}
-
-unsigned int CALLBACK OpenSSL::Async_Response(LPVOID callback){
-	wstring res;
-	OpenSSL* pthis=((CALL*)callback)->pthis;
-	HANDLE hEvent;
-	WSANETWORKEVENTS events;
-
-	hEvent=WSACreateEvent();
-	WSAEventSelect(m_socket.GetSocket(),hEvent,FD_READ|FD_CONNECT|FD_CLOSE);
-	while(1){
-		if(WSAWaitForMultipleEvents(1,&hEvent,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
-			break;
-		}
-		WSAEnumNetworkEvents(m_socket.GetSocket(),hEvent,&events);
-		switch(events.lNetworkEvents){
-		case FD_CONNECT:
-			break;
-		case FD_CLOSE:
-			break;
-		case FD_READ:
-			Response(&res);
-			((CALL*)callback)->callback((wchar_t*)res.c_str());
-			break;
-		}
-	}
-	WSACloseEvent(hEvent);
-	_endthreadex(0);
-	CloseHandle(hThread);
-
-	return true;
-
-	/*fd_set fds;
-	FD_ZERO(&fds);
-	FD_SET(m_socket.GetSocket(),&fds);*/
-}
-
-bool OpenSSL::Init(){
-	ssl=NULL;
-	ctx=NULL;
-	return true;
-}
-
-bool OpenSSL::Reset(){
-	if(ssl!=NULL){
-		SSL_shutdown(ssl);
-		SSL_free(ssl);
-		ssl=NULL;
-	}
-	if(ctx!=NULL){
-		SSL_CTX_free(ctx);
-		ctx=NULL;
-	}
-	return true;
-}
-bool OpenSSL::End(){
-	Reset();
-	return true;
-}
 /*
-void OpenSSL::Get(const wchar_t* cmd,const wchar_t* host,const wchar_t* path,const wchar_t *head,const wchar_t*content){
-	Socket socket;
-	int i,err,s;
-	DWORD res;
-	long VeryErr;
-
-	char msg[1000],request[10000];
-	char *str;
-	SSL_CTX *ctx;
-	SSL *ssl;
-	X509 *server_cert;
-
-	socket.Connect(host,TEXT("https"));
-
-	fd_set fds;
-	FD_ZERO(&fds);
-	FD_SET(socket.GetSocket(),&fds);
-	
-
-	//socket.Connect(TEXT("api.twitter.com"),TEXT("https"));
-
-	SSL_library_init();
-	SSL_load_error_strings();
-
-	ctx=SSL_CTX_new(SSLv23_client_method());
-	//i=SSL_CTX_load_verify_locations(ctx,NULL,"D:/MyDocuments/Visual Studio 2010/Projects/FILER/FILER/BuiltinObjectToken-VerisignClass3PublicPrimaryCertificationAuthority-G2.cer");
-	//i=SSL_CTX_load_verify_locations(ctx,NULL,"./BuiltinObjectToken-VerisignClass3PublicPrimaryCertificationAuthority-G2.cer");
-	SSL_CTX_set_verify_depth(ctx,SSL_VERIFY_PEER);
-
-	ssl=SSL_new(ctx);
-	SSL_set_fd(ssl,socket.GetSocket());
-	err=SSL_connect(ssl);
-
-	SSL_SESSION *ssi=SSL_get_session(ssl);
-
-	sprintf(msg,"使用する暗号化方式=%s\n",SSL_get_cipher(ssl));
-	MessageBoxA(NULL,msg,NULL,MB_OK);
-
-	server_cert=SSL_get_peer_certificate(ssl);
-	MessageBoxA(NULL,"Server_Certificate\n",NULL,MB_OK);
-
-	str=X509_NAME_oneline(X509_get_subject_name(server_cert),NULL,NULL);
-
-	sprintf(msg,"Subject:%s",str);
-	MessageBoxA(NULL,msg,NULL,MB_OK);
-
-	str=X509_NAME_oneline(X509_get_issuer_name(server_cert),NULL,NULL);
-
-	sprintf(msg,"Issuer:%s",str);
-	MessageBoxA(NULL,msg,NULL,MB_OK);
-
-	VeryErr=SSL_get_verify_result(ssl);
-	
-	if(VeryErr==X509_V_OK){
-		MessageBoxA(NULL,"Verify_OK!",NULL,MB_OK);
-	}else{
-		sprintf(msg,"%d",VeryErr);
-
-		MessageBoxA(NULL,msg,NULL,MB_OK);
-	}
-	
-	sprintf(request,"GET %s?%s HTTP/1.1\r\nHost:%s\r\nUser-Agent:Tw-Cl/2.0\r\n\r\n","/2/user.json",head,"userstream.twitter.com");
-
-	err=SSL_write(ssl,request,strlen(request));
-	//SSL_write(ssl,head,strlen(head));
-
-	while(1){
-		char buf[1000];
-		int read_size;
-
-		select(0,&fds,NULL,NULL,NULL);
-		if(FD_ISSET(socket.GetSocket(),&fds)){
-			read_size=SSL_read(ssl,buf,sizeof(buf)-1);
-			buf[read_size]=0;
-			MessageBoxA(NULL,buf,NULL,MB_OK);
-			if(read_size>0){
-			}else{
-				//break;
-			}
-		}
-	}
-
-	SSL_shutdown(ssl);
-	SSL_free(ssl);
-	SSL_CTX_free(ctx);
-}
-*/
-/*
-LONG APIENTRY OpenSSL::MainProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
-	switch(msg){
-	case WM_WINSOCK:
-		break;
-	}
-
-}
-*/
-
-
-
 void Inet_Async::Auto(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content,unsigned int CALLBACK cb(void*),void* arg){
 	unsigned int res;
 	inet.Auto(cmd,url,head,content,NULL);
@@ -1157,10 +752,10 @@ unsigned int CALLBACK Inet_Async::ThreadProc(void* arg){
 		call(events.lNetworkEvents);
 	}
 	WSACloseEvent(hEvent);
-	_endthreadex(0);*/
+	_endthreadex(0);
 	return 0;
 }
-
+*/
 /*
 bool Async::Start(ASYNC_CALLBACK cb){
 	unsigned int res;

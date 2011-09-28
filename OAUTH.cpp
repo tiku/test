@@ -106,17 +106,17 @@ bool Oauth::Step2(wchar_t* veri){
 	return GetAccessToken();
 }
 
-bool Oauth::Send(const wchar_t* cmd,const wchar_t* url,vector<PairData> content,wstring* res){
-	wstring status,header,contents;
-	vector<PairData> pd(1);
+bool Oauth::Send(const wchar_t* cmd,const wchar_t* url,PairDataArray content,wstring* res){
+	int status;
+	PairDataArray pd;
 
-	GetHeader(cmd,url,&pd[0]);
-	Http.Send(cmd,url,pd,NULL_PAIRS);
-	Http.Recv(&status,&header,&contents);
-	if(status!=HTTP_RES_OK){
+	SetHeader(cmd,url);
+	GetData(&pd);
+	inet.Request(cmd,url,pd,PairDataArray());
+	status=inet.Response(res);
+	if(status!=200){
 		return false;
 	}
-	*res=contents;
 	return true;
 }
 
@@ -152,21 +152,22 @@ bool Oauth::GetAccessToken(){
 	return SetAccessTokens(TEXT("POST"),TEXT("http://twitter.com/oauth/access_token"));
 }
 
-void Oauth::GetHeader(const wchar_t* cmd,const wchar_t* url,PairData* res){
-	wstring data;
+void Oauth::GetHeader(const wchar_t* cmd,const wchar_t* url,PairDataArray* res){
+	wstring key,data;
 
 	SetTimeStamp();
 	SetNonce();
 	SetSignature(cmd,url);
 
-	res->key=TEXT("Authorization");
+	key=TEXT("Authorization");
 	GetOauthJoin(&data,',');
-	res->data=TEXT("OAuth ");
-	res->data.append(data);
+	data.insert(0,TEXT("OAuth "));
+	res->Insert(key.c_str(),data.c_str());
 	return;
 }
 
 void Oauth::GetData(PairDataArray* res){
+	m_oauth.Sort();
 	*res=m_oauth;
 }
 
@@ -180,11 +181,16 @@ void Oauth::SetHeader(const wchar_t* cmd,const wchar_t* url){
 
 bool Oauth::SetAccessTokens(const wchar_t* cmd,const wchar_t* url){
 	wstring body;
-	vector<PairData> pd(1);
+	int begin,end;
+	/*vector<PairData> pd(1);
 	int begin,end;
 
 	GetHeader(cmd,url,&pd[0]);
 	if(!Send(cmd,url,pd,&body)){
+		return false;
+	}*/
+
+	if(!Send(cmd,url,PairDataArray(),&body)){
 		return false;
 	}
 
@@ -208,12 +214,12 @@ void Oauth::SetSignature(const wchar_t* cmd,const wchar_t* url){
 	key.append(TEXT("&"));
 	key.append(m_data.access_secret);
 
-	Http.UrlEncode(cmd,&tmp);
+	m_http_func.UrlEncode(cmd,&tmp);
 	msg.append(tmp).append(TEXT("&"));
-	Http.UrlEncode(url,&tmp);
+	m_http_func.UrlEncode(url,&tmp);
 	msg.append(tmp).append(TEXT("&"));
 	GetOauthJoin(&tmp,'&');
-	Http.UrlEncode(tmp.c_str(),&tmp);
+	m_http_func.UrlEncode(tmp.c_str(),&tmp);
 	msg.append(tmp);
 
 	HMac_Sha1 hms1;
@@ -222,7 +228,7 @@ void Oauth::SetSignature(const wchar_t* cmd,const wchar_t* url){
 	WideToMultiChar(msg.c_str(),msg.size(),&mmsg);
 	hms1.Encode((char*)mkey.c_str(),(char*)mmsg.c_str(),&msignature);
 	MultiToWideChar(msignature.c_str(),msignature.size(),&signature);
-	Http.UrlEncode(signature.c_str(),&signature);
+	m_http_func.UrlEncode(signature.c_str(),&signature);
 
 	//m_oauth["oauth_signature"]=signature;
 	m_oauth.Insert(OAUTH_SIGNATURE,signature.c_str());

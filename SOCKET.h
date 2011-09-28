@@ -77,94 +77,108 @@ public:
 	void Clear();
 };
 
+class Socket_Base{
+protected:
+	SOCKET m_sock;
+	wstring m_host;
+
+	bool Com_Connect(const wchar_t*,const wchar_t*);
+	void Com_Reset();
+public:
+	Socket_Base();
+	virtual ~Socket_Base();
+
+	SOCKET GetSocket();
+
+	virtual bool Connect(const wchar_t*)=0;
+	virtual int Send(const wchar_t*,int)=0;
+	virtual int Recv(wstring*)=0;
+};
+
+
+
+class Def_Socket:public Socket_Base{
+public:
+	bool Connect(const wchar_t*);
+	int Send(const wchar_t*,int);
+	int Recv(wstring*);
+};
+
+
+class SSL_Socket:public Socket_Base{
+private:
+	SSL *ssl;
+	SSL_CTX *ctx;
+
+	void SSL_Reset();
+public:
+	SSL_Socket();
+	~SSL_Socket();
+
+	bool Connect(const wchar_t*);
+	int Send(const wchar_t*,int);
+	int Recv(wstring*);
+};
+
 
 class Socket{
 private:
-public:
-	SOCKET m_sock;
-	wstring m_host;
-	bool Init();
-	bool End();
-	bool Reset();
+	Socket_Base* m_socket;
+
+	void Reset();
 public:
 	Socket();
 	~Socket();
 
-	SOCKET GetSocket();
-	wchar_t* GetHost();
-
 	bool Connect(const wchar_t*,const wchar_t*);
-	bool UrlSplit(wchar_t*,wstring*,wstring*);
-	bool UrlEncode(wchar_t*,wstring*);
-	int Send(const wchar_t*,int,int);
-	int Recv(wstring*,int);
+	int Send(const wchar_t*,int);
+	int Recv(wstring*);
 };
 
-/*
-class Http{
+
+
+class Inet_Async{
 private:
-	Socket m_socket;
-	wstring m_host;
-public:
-	void GetHeadStr(vector<PairData>,wstring*);
-	void GetContentStr(vector<PairData>,wstring*);
-	bool UrlSplit(const wchar_t*,wstring*,wstring*,wstring*);
-	bool UrlEncode(const wchar_t*,wstring*);
-	bool Send(const wchar_t*,const wchar_t*,vector<PairData>,vector<PairData>);
-	bool Https(const wchar_t*,const wchar_t*,const wchar_t*,vector<PairData>,vector<PairData>);
-	bool Recv(wstring*,wstring*,wstring*);
-};
-*/
+	HANDLE m_hThread;
+	Socket_Base* m_socket;
+	bool running;
+	bool suspend;
+	HANDLE hEvent;
+	HANDLE hEv2;
 
-class Http_If{
-	virtual bool Connect(const wchar_t*)=0;
-	virtual bool Request(const wchar_t*,const wchar_t*,const wchar_t*,const wchar_t*)=0;
-	virtual bool Response(wstring*)=0;
 
-};
-
-class Http_Bs_If{
+	unsigned int CALLBACK call(int,void*);
+	void *arg;
 public:
-	const static wchar_t* protocol;
-public:
-	virtual bool Connect(const wchar_t*)=0;
-	virtual bool Send(const wchar_t*,int)=0;
-	virtual bool Recv(wstring*)=0;
-	virtual wchar_t* GetProtocol()=0;
+	~Inet_Async();
+	bool Connect(const wchar_t*,const wchar_t*);
+	bool Request(const wchar_t*,const wchar_t*,PairDataArray,PairDataArray);
+	bool Response(unsigned int CALLBACK cb(int,void*));
+	void Start();
+	void Stop();
+	void End();
+	static unsigned int CALLBACK CallProc(void*);
+	unsigned int CALLBACK ThreadProc(void*);
+	void Function();
 };
 
-class Http_Bs:public Http_Bs_If{
-private:
-	Socket m_socket;
-	wstring m_host;
+class Inet_Async_Create{
+protected:
+	HANDLE m_hThread;
+	Inet_Async ia;
+	wstring a,b;
+	PairDataArray c,d;
 public:
-	bool Connect(const wchar_t*);
-	bool Send(const wchar_t*,int);
-	bool Recv(wstring*);
-	wchar_t* GetProtocol();
-	static wchar_t* Protocol();
-};
-
-class Https_Bs:public Http_Bs_If{
-
-private:
-	Socket m_socket;
-	SSL_CTX* ctx;
-	SSL *ssl;
-	wstring m_host;
-public:
-	Https_Bs();
-	~Https_Bs();
-
-	void Init();
+	~Inet_Async_Create();
 	void Reset();
-
-	bool Connect(const wchar_t*);
-	bool Send(const wchar_t*,int);
-	bool Recv(wstring*);
-	wchar_t*GetProtocol();
-	static wchar_t* Protocol();
+	void Create(const wchar_t*,const wchar_t*,PairDataArray,PairDataArray);
+	void Start();
+	void Stop();
+private:
+	static unsigned int CALLBACK cb(void*);
+	unsigned int CALLBACK proc(void*);
 };
+
 
 //HTTPï‚èïä÷êîåQ
 //ó¨ópÇ≈Ç´ÇªÇ§Ç»ÇÃÇ≈ÉNÉâÉXÇ…ì∆óßÇ≥ÇπÇÈ
@@ -182,22 +196,19 @@ public:
 
 class Inet{
 private:
-	Http_Bs_If* m_http;
+	Socket m_socket;
 	Http_Func m_func;
 	wstring m_host;
 	wstring m_response;
 public:
 	Inet();
-//	Inet(ASYNC_CALLBACK);
 	~Inet();
 
-	void Init();
-//	void Init(ASYNC_CALLBACK);
 	void Reset();
 
 	bool Connect(const wchar_t*,const wchar_t*);
 	bool Async_Connect(const wchar_t*);
-	bool Request(const wchar_t*,const wchar_t*,const wchar_t*,const wchar_t*);
+	bool Request(const wchar_t*,const wchar_t*,PairDataArray,PairDataArray);
 	int Response(wstring*);
 
 	bool StatusCodeAnalysis(wstring,int*);
@@ -211,57 +222,9 @@ public:
 
 
 
-
-class OpenSSL{
-	typedef DWORD(CALLBACK* ASYNC_CALLBACK)(wchar_t*);
-	Http_Func func;
-	struct CALL{
-		ASYNC_CALLBACK callback;
-		OpenSSL* pthis;
-	}call;
-	class Socket m_socket;
-	string m_host;
-	SSL* ssl;
-	SSL_CTX *ctx;
-	HANDLE hThread;
-
-public:
-	bool Connect(const wchar_t*);
-	bool Request(const wchar_t*,const wchar_t*,const wchar_t*,const wchar_t*);
-	bool Response(wstring*);
-	bool Async(ASYNC_CALLBACK);
-	static unsigned int CALLBACK Async_Call(LPVOID);
-	unsigned int CALLBACK Async_Response(LPVOID);
-	bool Init();
-	bool Reset();
-	bool End();
-	//void Get(const wchar_t*,const wchar_t*,const wchar_t*,const wchar_t*,const wchar_t*);
-	void Send();
-	void Recv();
-};
-
-class Http{
-private:
-	Http_Func func;
-	Socket m_socket;
-	wstring m_host;
-public:
-	void GetHeadStr(vector<PairData>,wstring*);
-	void GetContentStr(vector<PairData>,wstring*);
-	bool UrlSplit(const wchar_t*,wstring*,wstring*,wstring*);
-	bool UrlEncode(const wchar_t*,wstring*);
-	bool Send(const wchar_t*,const wchar_t*,vector<PairData>,vector<PairData>);
-	bool Https(const wchar_t*,const wchar_t*,const wchar_t*,vector<PairData>,vector<PairData>);
-	bool Recv(wstring*,wstring*,wstring*);
-
-	bool Connect(const wchar_t*);
-	bool Request(const wchar_t*,const wchar_t*,const wchar_t*,const wchar_t*);
-	bool Response(wstring*);
-};
-
 //typedef unsigned(CALLBACK* THREAD_CALL)(void*);
 
-
+/*
 class Inet_Async{
 private:
 	bool running;
@@ -278,7 +241,7 @@ public:
 	unsigned int CALLBACK ThreadProc(void*);
 
 };
-
+*/
 /*
 class Async{
 //#define THREAD_CALL unsigned int CALLBACK

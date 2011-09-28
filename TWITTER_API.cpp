@@ -16,20 +16,37 @@ void Twitter_Api::Followers(){
 void Twitter_Api::Update(const wchar_t* text){
 	//Oauth.GetHeader
 }
-/*
+
 void User_Stream::Start(){
 	wchar_t* cmd,*url;
 	PairDataArray pda;
 
 	cmd=TEXT("GET");
+	//url=TEXT("http://www.google.co.jp/");
 	url=TEXT("http://api.twitter.com/1/statuses/friends_timeline.json");
+	//url=TEXT("https://userstream.twitter.com/2/user.json");
 
 
 	oauth.SetHeader(cmd,url);
 	oauth.GetData(&pda);
-	inet_async.Auto(cmd,url,PairDataArray(),pda,Callback,this);
-}
+	//oauth.GetHeader(cmd,url,&pda);
 
+	Inet inet;
+	//inet.Connect(TEXT("userstream.twitter.com"),TEXT("https"));
+	inet.Connect(TEXT("api.twitter.com"),TEXT("http"));
+	inet.Request(cmd,url,PairDataArray(),pda);
+	wstring a;
+	inet.Response(&a);
+
+	//iac.Create(cmd,url,PairDataArray(),pda);
+	//Sleep(20000);
+	//iac.Stop();
+	//Sleep(10000);
+	
+	//inet_async.Request(cmd,url,PairDataArray(),pda);
+	//inet_async.Start();
+}
+/*
 unsigned int CALLBACK User_Stream::Callback(void* lpvoid){
 	((User_Stream*)lpvoid)->Event_Function(NULL);
 	return 0;

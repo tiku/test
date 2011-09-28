@@ -28,7 +28,8 @@ using namespace WChar;
 //‚²‚¿‚á‚²‚¿‚á‚µ‚½‚¯‚Ç‚Ü‚ ‚¢‚¢‚â
 
 class Oauth{
-	Http Http;
+	Inet inet;
+	Http_Func m_http_func;
 	struct oauth_data{
 		wstring consumer_key;
 		wstring consumer_secret;
@@ -47,9 +48,9 @@ public:
 	Oauth();
 	bool Step1();
 	bool Step2(wchar_t*);
-	bool Send(const wchar_t*,const wchar_t*,vector<PairData>,wstring*);
+	bool Send(const wchar_t*,const wchar_t*,PairDataArray,wstring*);
 
-	void GetHeader(const wchar_t*,const wchar_t*,PairData*);
+	void GetHeader(const wchar_t*,const wchar_t*,PairDataArray*);
 	void GetData(PairDataArray*);
 	void SetHeader(const wchar_t*,const wchar_t*);
 private:
