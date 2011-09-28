@@ -19,7 +19,7 @@ MainWindow::MainWindow(HINSTANCE hInst){
 
 LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 	//static OauthWindow ow;
-	static User_Stream us;
+	//static User_Stream us;
 	switch(msg){
 	case WM_CREATE:
 		return 0;
@@ -39,7 +39,7 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 			break;
 		case 402:
 			{
-				
+				User_Stream us;
 				us.Start();
 				/*wchar_t* host=TEXT("api.twitter.com");
 				wchar_t* cmd=TEXT("GET");

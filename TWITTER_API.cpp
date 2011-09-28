@@ -22,10 +22,9 @@ void User_Stream::Start(){
 	PairDataArray pda;
 
 	cmd=TEXT("GET");
-	//url=TEXT("http://www.google.co.jp/");
-	url=TEXT("http://api.twitter.com/1/statuses/friends_timeline.json");
-	//url=TEXT("https://userstream.twitter.com/2/user.json");
-
+	
+	//url=TEXT("http://api.twitter.com/1/statuses/friends_timeline.json");
+	url=TEXT("http://twitter.com/");
 
 	oauth.SetHeader(cmd,url);
 	oauth.GetData(&pda);
@@ -33,8 +32,8 @@ void User_Stream::Start(){
 
 	Inet inet;
 	//inet.Connect(TEXT("userstream.twitter.com"),TEXT("https"));
-	inet.Connect(TEXT("api.twitter.com"),TEXT("http"));
-	inet.Request(cmd,url,PairDataArray(),pda);
+	inet.Connect(TEXT("twitter.com"),TEXT("http"));
+	inet.Request(cmd,url,PairDataArray(),PairDataArray());
 	wstring a;
 	inet.Response(&a);
 

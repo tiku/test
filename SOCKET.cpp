@@ -484,7 +484,7 @@ bool Http_Func::GetRequestString(const wchar_t* cmd,const wchar_t* url,const wch
 	
 	res->append(TEXT(" ")).append(HTTP_VERSION_TEXT).append(TEXT("\r\n"));
 	UrlSplit(url,&a,&host,&b);
-	res->append(TEXT("Host :")).append(host).append(TEXT("\r\n"));
+	res->append(TEXT("Host:")).append(host).append(TEXT("\r\n"));
 	res->append(head);
 	res->append(TEXT("\r\n"));
 	if(!get){
@@ -599,7 +599,7 @@ bool Inet::Request(const wchar_t* cmd,const wchar_t* url,PairDataArray head,Pair
 	wstring  head_str,content_str;
 
 	
-	//SetDefaultHeader(&head);
+	SetDefaultHeader(&head);
 	
 	m_func.HeaderJoin(head,&head_str);
 	m_func.ContentJoin(content,&content_str);
@@ -707,7 +707,7 @@ bool Inet::HeadAnalysis(const wchar_t* hdtext,PairDataArray*res){
 
 bool Inet::SetDefaultHeader(PairDataArray* head){
 	head->Insert(TEXT("Connection"),TEXT("Keep-Alive"));
-	head->Insert(TEXT("User-Agent"),TEXT("Inet /2"));
+	head->Insert(TEXT("User-Agent"),TEXT("Inet/2"));
 	head->Insert(TEXT("Accept-Language"),TEXT("ja"));
 	return true;
 }
