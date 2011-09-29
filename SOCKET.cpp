@@ -221,6 +221,7 @@ int SSL_Socket::Send(const wchar_t* w_send,int size){
 }
 
 int SSL_Socket::Recv(wstring* res){
+	
 	int total_readed=0;
 	res->clear();
 	while(1){
@@ -230,12 +231,13 @@ int SSL_Socket::Recv(wstring* res){
 		read_size=SSL_read(ssl,buf,sizeof(buf)-1);
 		res->resize(total_readed+read_size);
 		total_readed+=MultiByteToWideChar(CP_UTF8,NULL,buf,read_size,(wchar_t*)res->c_str()+total_readed,read_size);
-		if(read_size>0){
+		if(read_size==(MAX_RECV-1)){
 			buf[read_size]=0;
 		}else{
 			break;
 		}
 	}
+	
 	return true;
 }
 
@@ -301,9 +303,6 @@ bool Inet_Async::Request(const wchar_t* cmd,const wchar_t* url,PairDataArray hea
 
 	func.GetRequestString(cmd,url,head_str.c_str(),content_str.c_str(),&send);
 	m_socket->Send(send.c_str(),send.size());
-
-	wstring aaa;
-	m_socket->Recv(&aaa);
 	return true;
 }
 
@@ -333,6 +332,7 @@ void Inet_Async::Stop(){
 }
 
 void Inet_Async::End(){
+
 }
 
 unsigned int CALLBACK Inet_Async::CallProc(void* arg){
@@ -407,9 +407,9 @@ void Inet_Async_Create::Create(const wchar_t* cmd,const wchar_t* url,PairDataArr
 	b=url;
 	c=head;
 	d=content;
-		ia.Request(a.c_str(),b.c_str(),c,d);
-	ia.Start();
-	//m_hThread=(HANDLE)_beginthreadex(NULL,NULL,cb,this,NULL,&res);
+	//ia.Request(a.c_str(),b.c_str(),c,d);
+	//ia.Start();
+	m_hThread=(HANDLE)_beginthreadex(NULL,NULL,cb,this,NULL,&res);
 }
 
 void Inet_Async_Create::Stop(){
@@ -434,6 +434,85 @@ unsigned int Inet_Async_Create::proc(void* arg){
 	return 0;
 }
 
+unsigned int CALLBACK WSA_Async::CallProc(void* arg){
+	return ((WSA_Async*)arg)->ThreadProc(NULL);
+}
+
+unsigned int CALLBACK WSA_Async::ThreadProc(void* arg){
+	Event_Proc();
+
+	CloseHandle(m_hThread);
+	_endthreadex(0);
+	return 0;
+}
+
+
+void WSA_Async::Event_Proc(){
+	wstring res;
+	WSANETWORKEVENTS events;
+	DWORD dwResult;
+
+	m_hWSAEvent=WSACreateEvent();
+	WSAEventSelect(m_socket->GetSocket(),m_hWSAEvent,FD_READ|FD_CLOSE);
+	HANDLE hWSAEvents[3];
+	hWSAEvents[0]=m_hWSAEvent;
+	hWSAEvents[1]=m_hWSAStop;
+	hWSAEvents[2]=m_hWSAExit;
+	while(1){
+		dwResult=WSAWaitForMultipleEvents(3,hWSAEvents,FALSE,WSA_INFINITE,FALSE);
+		if(dwResult==WSA_WAIT_FAILED){
+			break;
+		}
+		if(dwResult-WSA_WAIT_EVENT_0==2){
+			break;
+		}
+		if(dwResult-WSA_WAIT_EVENT_0==1){
+			WSAResetEvent(m_hWSAStop);
+			if(WSAWaitForMultipleEvents(1,&m_hWSAStop,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
+				break;
+			}
+		}
+		if(dwResult-WSA_WAIT_EVENT_0==0){
+			WSAEnumNetworkEvents(m_socket->GetSocket(),m_hWSAEvent,&events);
+			switch(events.lNetworkEvents){
+			case FD_CLOSE:
+				break;
+			case FD_READ:
+				m_socket->Recv(&res);
+				break;
+			}
+		}
+	}
+	WSACloseEvent(m_hWSAEvent);
+}
+
+void WSA_Async::Request(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content){
+	Http_Func func;
+	wstring head_str,content_str,send;
+	wstring proto,host,path;
+	
+	func.UrlSplit(url,&proto,&host,&path);
+
+	m_socket=new SSL_Socket();
+	m_socket->Connect(host.c_str());
+
+	func.HeaderJoin(head,&head_str);
+	func.ContentJoin(content,&content_str);
+	func.GetRequestString(cmd,url,head_str.c_str(),content_str.c_str(),&send);
+	m_socket->Send(send.c_str(),send.size());
+}
+
+void WSA_Async::Response(){
+	//Event_Proc();
+	m_hThread=(HANDLE)_beginthreadex(NULL,NULL,CallProc,this,NULL,NULL);
+}
+
+void WSA_Async::Start(){
+}
+
+void WSA_Async::Stop(){
+	WSASetEvent(m_hWSAStop);
+}
 
 
 bool Http_Func::GetRequestString(
@@ -470,20 +549,22 @@ bool Http_Func::GetRequestString(
 
 bool Http_Func::GetRequestString(const wchar_t* cmd,const wchar_t* url,const wchar_t* head,const wchar_t* content,wstring*res){
 #define HTTP_VERSION_TEXT TEXT("HTTP/1.1")
-	wstring host,a,b;
+	wstring host,a,path;
+	UrlSplit(url,&a,&host,&path);
+
 	bool get=false;
 	if(wcscmp(cmd,TEXT("GET"))==0||wcscmp(cmd,TEXT("HEAD"))==0){
 		get=true;
 	}
 	res->clear();
 	res->append(cmd).append(TEXT(" "));
-	res->append(url);
+	res->append(path);
 	if(get&&lstrlen(content)!=0){
 		res->append(TEXT("?")).append(content);
 	}
 	
 	res->append(TEXT(" ")).append(HTTP_VERSION_TEXT).append(TEXT("\r\n"));
-	UrlSplit(url,&a,&host,&b);
+
 	res->append(TEXT("Host:")).append(host).append(TEXT("\r\n"));
 	res->append(head);
 	res->append(TEXT("\r\n"));

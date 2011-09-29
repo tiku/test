@@ -23,17 +23,25 @@ void User_Stream::Start(){
 
 	cmd=TEXT("GET");
 	
-	//url=TEXT("http://api.twitter.com/1/statuses/friends_timeline.json");
-	url=TEXT("http://twitter.com/");
+	url=TEXT("https://userstream.twitter.com/2/user.json");
+	//url=TEXT("http://twitter.com/");
 
 	oauth.SetHeader(cmd,url);
 	oauth.GetData(&pda);
+
+	//oauth.GetHeader(cmd,url,&pda);
 	//oauth.GetHeader(cmd,url,&pda);
 
 	Inet inet;
+
+	wa.Request(cmd,url,PairDataArray(),pda);
+	wa.Response();
+	//iac.Create(cmd,url,PairDataArray(),pda);
+	//iac.Start();
+	return;
 	//inet.Connect(TEXT("userstream.twitter.com"),TEXT("https"));
-	inet.Connect(TEXT("twitter.com"),TEXT("http"));
-	inet.Request(cmd,url,PairDataArray(),PairDataArray());
+	inet.Connect(TEXT("userstream.twitter.com"),TEXT("https"));
+	inet.Request(cmd,url,PairDataArray(),pda);
 	wstring a;
 	inet.Response(&a);
 
@@ -44,6 +52,10 @@ void User_Stream::Start(){
 	
 	//inet_async.Request(cmd,url,PairDataArray(),pda);
 	//inet_async.Start();
+}
+
+void User_Stream::Stop(){
+	wa.Stop();
 }
 /*
 unsigned int CALLBACK User_Stream::Callback(void* lpvoid){

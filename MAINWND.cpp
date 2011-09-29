@@ -19,7 +19,7 @@ MainWindow::MainWindow(HINSTANCE hInst){
 
 LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 	//static OauthWindow ow;
-	//static User_Stream us;
+	static User_Stream us;
 	switch(msg){
 	case WM_CREATE:
 		return 0;
@@ -30,6 +30,7 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 		switch(wp){
 		case 401:
 			{
+				us.Stop();
 				//us.Start2();
 				//Json_Parser jp;
 				//jp.Parse(NULL);
@@ -39,7 +40,6 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 			break;
 		case 402:
 			{
-				User_Stream us;
 				us.Start();
 				/*wchar_t* host=TEXT("api.twitter.com");
 				wchar_t* cmd=TEXT("GET");
