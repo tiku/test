@@ -29,6 +29,8 @@ private:
 public:
 	void Start();
 	void Stop();
+	void Restart();
+	void End();
 	//void Start2(){iac.Start();}
 	//static unsigned int CALLBACK Callback(void*);
 //	unsigned CALLBACK Event_Function(void*);

@@ -52,6 +52,12 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 				
 			}
 			break;
+		case 403:
+			us.Restart();
+			break;
+		case 404:
+			us.End();
+			break;
 		}
 	}
 	return DefWindowProc(hWnd,msg,wp,lp);

@@ -121,9 +121,53 @@ public:
 };
 
 
+
+class WSA_Async{
+private:
+	HANDLE m_hThread;
+	HANDLE m_hWSAEvent;
+	HANDLE m_hWSAStop,m_hWSAExit,m_hWSAStart,m_hWSADone;
+	Socket_Base* m_socket;
+
+	void CreateEvents();
+	void CloseEvents();
+
+	void Event_Proc();
+	
+	static unsigned int CALLBACK CallProc(void*);
+	unsigned int CALLBACK ThreadProc(void*);
+public:
+	WSA_Async(){
+		m_hWSAEvent=NULL;
+		m_hWSAStop=NULL;
+		m_hWSAExit=NULL;
+		m_hWSADone=NULL;
+		m_hWSAStart=NULL;
+		CreateEvents();
+	}
+	~WSA_Async(){
+		SetEvent(m_hWSAStart);
+		SetEvent(m_hWSAExit);
+		WaitForSingleObject(m_hThread,INFINITE);
+		CloseEvents();
+	}
+
+	void Stop();
+	void Start();
+	void End();
+
+	void CallBack(const Socket_Base*);
+
+	void Request(const wchar_t*,const wchar_t*,PairDataArray,PairDataArray);
+	void Response();
+};
+
+
+
 class Socket{
 private:
 	Socket_Base* m_socket;
+	WSA_Async async;
 
 	void Reset();
 public:
@@ -133,84 +177,11 @@ public:
 	bool Connect(const wchar_t*,const wchar_t*);
 	int Send(const wchar_t*,int);
 	int Recv(wstring*);
+	int Recv_Async();
 };
 
 
 
-class Inet_Async{
-private:
-	HANDLE m_hThread;
-	Socket_Base* m_socket;
-	bool running;
-	bool suspend;
-	HANDLE hEvent;
-	HANDLE hEv2;
-
-
-	unsigned int CALLBACK call(int,void*);
-	void *arg;
-public:
-	Inet_Async(){
-		running=false;
-		suspend=false;
-	}
-	~Inet_Async();
-	bool Connect(const wchar_t*,const wchar_t*);
-	bool Request(const wchar_t*,const wchar_t*,PairDataArray,PairDataArray);
-	bool Response(unsigned int CALLBACK cb(int,void*));
-	void Start();
-	void Stop();
-	void End();
-	static unsigned int CALLBACK CallProc(void*);
-	unsigned int CALLBACK ThreadProc(void*);
-	void Function();
-};
-
-class Inet_Async_Create{
-protected:
-	HANDLE m_hThread;
-	Inet_Async ia;
-	wstring a,b;
-	PairDataArray c,d;
-	HANDLE hEvent1,hEvent2;
-	Socket_Base*  m_socket;
-public:
-	~Inet_Async_Create();
-	void Reset();
-	void Create(const wchar_t*,const wchar_t*,PairDataArray,PairDataArray);
-	void Start();
-	void Stop();
-private:
-	static unsigned int CALLBACK cb(void*);
-	unsigned int CALLBACK proc(void*);
-};
-
-class WSA_Async{
-private:
-	enum{WSA_EVENT_END,WSA_EVENT_STOP,WSA_EVENT_START};
-	HANDLE m_hThread;
-	HANDLE m_hWSAEvent;
-	HANDLE m_hWSAStop,m_hWSAExit;
-	Socket_Base* m_socket;
-
-	void Event_Proc();
-	
-	static unsigned int CALLBACK CallProc(void*);
-	unsigned int CALLBACK ThreadProc(void*);
-public:
-	WSA_Async(){
-		m_hWSAEvent=NULL;
-		m_hWSAStop=WSACreateEvent();
-		m_hWSAExit=WSACreateEvent();
-	}
-
-
-	void Stop();
-	void Start();
-
-	void Request(const wchar_t*,const wchar_t*,PairDataArray,PairDataArray);
-	void Response();
-};
 
 //HTTPï‚èïä÷êîåQ
 //ó¨ópÇ≈Ç´ÇªÇ§Ç»ÇÃÇ≈ÉNÉâÉXÇ…ì∆óßÇ≥ÇπÇÈ

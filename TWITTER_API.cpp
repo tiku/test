@@ -57,6 +57,14 @@ void User_Stream::Start(){
 void User_Stream::Stop(){
 	wa.Stop();
 }
+
+void User_Stream::Restart(){
+	wa.Start();
+}
+
+void User_Stream::End(){
+	wa.End();
+}
 /*
 unsigned int CALLBACK User_Stream::Callback(void* lpvoid){
 	((User_Stream*)lpvoid)->Event_Function(NULL);

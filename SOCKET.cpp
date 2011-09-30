@@ -242,6 +242,129 @@ int SSL_Socket::Recv(wstring* res){
 }
 
 
+unsigned int CALLBACK WSA_Async::CallProc(void* arg){
+	return ((WSA_Async*)arg)->ThreadProc(NULL);
+}
+
+unsigned int CALLBACK WSA_Async::ThreadProc(void* arg){
+	Event_Proc();
+	Start();
+	CloseHandle(m_hThread);
+	_endthreadex(0);
+	return 0;
+}
+
+void WSA_Async::CreateEvents(){
+	m_hWSAStart=WSACreateEvent();
+	m_hWSAStop=WSACreateEvent();
+	m_hWSAExit=WSACreateEvent();
+	m_hWSADone=WSACreateEvent();
+}
+
+void WSA_Async::CloseEvents(){
+	CloseHandle(m_hWSAStart);
+	CloseHandle(m_hWSAStop);
+	CloseHandle(m_hWSAExit);
+	CloseHandle(m_hWSADone);
+}
+
+
+void WSA_Async::Event_Proc(){
+	enum{WSA_EVENT_NET,WSA_EVENT_STOP,WSA_EVENT_EXIT,EVENTS_SIZE};
+	wstring res;
+	WSANETWORKEVENTS events;
+	DWORD dwResult;
+
+	m_hWSAEvent=WSACreateEvent();
+	WSAEventSelect(m_socket->GetSocket(),m_hWSAEvent,FD_READ|FD_CLOSE);
+	HANDLE hWSAEvents[EVENTS_SIZE];
+	hWSAEvents[WSA_EVENT_NET]=m_hWSAEvent;
+	hWSAEvents[WSA_EVENT_STOP]=m_hWSAStop;
+	hWSAEvents[WSA_EVENT_EXIT]=m_hWSAExit;
+
+	while(1){
+		dwResult=WSAWaitForMultipleEvents(EVENTS_SIZE,hWSAEvents,FALSE,WSA_INFINITE,FALSE);
+		if(dwResult==WSA_WAIT_FAILED){
+			break;
+		}
+		dwResult-=WSA_WAIT_EVENT_0;
+		switch(dwResult){
+		case WSA_EVENT_EXIT:
+			goto END;
+		case WSA_EVENT_STOP:
+			WSAResetEvent(m_hWSAStop);
+			if(WSAWaitForMultipleEvents(1,&m_hWSAStart,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
+				goto END;
+			}
+			WSAResetEvent(m_hWSAStart);
+			WSAResetEvent(m_hWSAStop);
+			WSAResetEvent(m_hWSAExit);
+			break;
+		case WSA_EVENT_NET:
+			WSAEnumNetworkEvents(m_socket->GetSocket(),m_hWSAEvent,&events);
+			switch(events.lNetworkEvents){
+			case FD_CLOSE:
+				goto END;
+			case FD_READ:
+				//m_socket->Recv(&res);
+				break;
+			}
+			break;
+		}
+		WSAResetEvent(hWSAEvents[dwResult]);
+	}
+END:
+	
+	WSASetEvent(m_hWSADone);
+	WSACloseEvent(m_hWSAEvent);
+}
+
+void WSA_Async::Request(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content){
+	Http_Func func;
+	wstring head_str,content_str,send;
+	wstring proto,host,path;
+	
+	func.UrlSplit(url,&proto,&host,&path);
+
+	m_socket=new SSL_Socket();
+	m_socket->Connect(host.c_str());
+
+	func.HeaderJoin(head,&head_str);
+	func.ContentJoin(content,&content_str);
+	func.GetRequestString(cmd,url,head_str.c_str(),content_str.c_str(),&send);
+	m_socket->Send(send.c_str(),send.size());
+}
+
+void WSA_Async::Response(){
+	//Event_Proc();
+	m_hThread=(HANDLE)_beginthreadex(NULL,NULL,CallProc,this,NULL,NULL);
+}
+
+void WSA_Async::Start(){
+	if(m_hThread==NULL){
+		return;
+	}
+	WSASetEvent(m_hWSAStart);
+}
+
+void WSA_Async::Stop(){
+	if(m_hThread==NULL){
+		return;
+	}
+	WSASetEvent(m_hWSAStop);
+}
+
+void WSA_Async::End(){
+	if(m_hThread==NULL){
+		return;
+	}
+	SetEvent(m_hWSAStart);
+	SetEvent(m_hWSAExit);
+	WaitForSingleObject(m_hThread,INFINITE);
+	m_hThread=NULL;
+}
+
+
 Socket::Socket(){
 	m_socket=NULL;
 }
@@ -276,242 +399,9 @@ int Socket::Recv(wstring* res){
 	return m_socket->Recv(res);
 }
 
-
-
-Inet_Async::~Inet_Async(){
-	running=false;
-	WSASetEvent(0);
-	WaitForSingleObject(m_hThread,INFINITE);
-	//WaitForSingleObject(m_hThread,INFINITE);
-}
-
-bool Inet_Async::Connect(const wchar_t* host,const wchar_t* proto){
-	m_socket=new SSL_Socket;
-	return m_socket->Connect(host);
-}
-
-bool Inet_Async::Request(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content){
-	Http_Func func;
-	wstring proto,host,path;
-	wstring head_str,content_str,send;
-
-	func.UrlSplit(url,&proto,&host,&path);
-
-	Connect(host.c_str(),proto.c_str());
-	func.HeaderJoin(head,&head_str);
-	func.ContentJoin(content,&content_str);
-
-	func.GetRequestString(cmd,url,head_str.c_str(),content_str.c_str(),&send);
-	m_socket->Send(send.c_str(),send.size());
-	return true;
-}
-
-
-void Inet_Async::Start(){
-	unsigned int res;
-	if(suspend){
-		SetEvent(hEv2);
-		suspend=false;
-		return;
-	}
-	running=true;
-
-	hEv2=CreateEvent(NULL,TRUE,FALSE,TEXT("AAA"));
-	Function();
-//	m_hThread=(HANDLE)_beginthreadex(NULL,NULL,CallProc,this,NULL,&res);
-	return;
-}
-
-void Inet_Async::Stop(){
-	SetEvent(hEv2);
-	suspend=true;
-	return;
-	running=false;
-	WSASetEvent(0);
-	WaitForSingleObject(m_hThread,INFINITE);
-}
-
-void Inet_Async::End(){
-
-}
-
-unsigned int CALLBACK Inet_Async::CallProc(void* arg){
-	return ((Inet_Async*)arg)->ThreadProc(arg);
-}
-
-unsigned int CALLBACK Inet_Async::ThreadProc(void* arg){
-	wstring res;
-	//HANDLE hEvent;
-	WSANETWORKEVENTS events;
-
-	hEvent=WSACreateEvent();
-	WSAEventSelect(m_socket->GetSocket(),hEvent,FD_READ|FD_CONNECT|FD_CLOSE);
-	while(running){
-		if(WSAWaitForMultipleEvents(1,&hEvent,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
-			break;
-		}
-		WSAEnumNetworkEvents(m_socket->GetSocket(),hEvent,&events);
-		switch(events.lNetworkEvents){
-		case FD_CONNECT:
-			break;
-		case FD_CLOSE:
-			break;
-		case FD_READ:
-			m_socket->Recv(&res);
-			break;
-		}
-	}
-	WSACloseEvent(hEvent);
-
-//	CloseHandle(m_hThread);
-//	_endthreadex(0);
-	return true;
-}
-
-void Inet_Async::Function(){
-	wstring res;
-	//HANDLE hEvent;
-	WSANETWORKEVENTS events;
-
-	hEvent=WSACreateEvent();
-	WSAEventSelect(m_socket->GetSocket(),hEvent,FD_READ|FD_CLOSE);
-
-	suspend=false;
-	while(running){
-		if(suspend){
-			WaitForSingleObject(hEv2,INFINITE);
-			continue;
-		}
-		if(WSAWaitForMultipleEvents(1,&hEvent,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
-			break;
-		}
-		WSAEnumNetworkEvents(m_socket->GetSocket(),hEvent,&events);
-		switch(events.lNetworkEvents){
-		case FD_CLOSE:
-			break;
-		case FD_READ:
-			m_socket->Recv(&res);
-			break;
-		}
-	}
-	WSACloseEvent(hEvent);
-}
-
-Inet_Async_Create::~Inet_Async_Create(){
-}
-
-
-void Inet_Async_Create::Create(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content){
-	unsigned int res;
-	a=cmd;
-	b=url;
-	c=head;
-	d=content;
-	//ia.Request(a.c_str(),b.c_str(),c,d);
-	//ia.Start();
-	m_hThread=(HANDLE)_beginthreadex(NULL,NULL,cb,this,NULL,&res);
-}
-
-void Inet_Async_Create::Stop(){
-	ia.Stop();
-	//SuspendThread(m_hThread);
-}
-
-void Inet_Async_Create::Start(){
-	ia.Start();
-}
-
-
-unsigned int Inet_Async_Create::cb(void* arg){
-	return ((Inet_Async_Create*)arg)->proc(NULL);
-}
-
-unsigned int Inet_Async_Create::proc(void* arg){
-	ia.Request(a.c_str(),b.c_str(),c,d);
-	ia.Start();
-	CloseHandle(m_hThread);
-	_endthreadex(0);
-	return 0;
-}
-
-unsigned int CALLBACK WSA_Async::CallProc(void* arg){
-	return ((WSA_Async*)arg)->ThreadProc(NULL);
-}
-
-unsigned int CALLBACK WSA_Async::ThreadProc(void* arg){
-	Event_Proc();
-
-	CloseHandle(m_hThread);
-	_endthreadex(0);
-	return 0;
-}
-
-
-void WSA_Async::Event_Proc(){
-	wstring res;
-	WSANETWORKEVENTS events;
-	DWORD dwResult;
-
-	m_hWSAEvent=WSACreateEvent();
-	WSAEventSelect(m_socket->GetSocket(),m_hWSAEvent,FD_READ|FD_CLOSE);
-	HANDLE hWSAEvents[3];
-	hWSAEvents[0]=m_hWSAEvent;
-	hWSAEvents[1]=m_hWSAStop;
-	hWSAEvents[2]=m_hWSAExit;
-	while(1){
-		dwResult=WSAWaitForMultipleEvents(3,hWSAEvents,FALSE,WSA_INFINITE,FALSE);
-		if(dwResult==WSA_WAIT_FAILED){
-			break;
-		}
-		if(dwResult-WSA_WAIT_EVENT_0==2){
-			break;
-		}
-		if(dwResult-WSA_WAIT_EVENT_0==1){
-			WSAResetEvent(m_hWSAStop);
-			if(WSAWaitForMultipleEvents(1,&m_hWSAStop,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
-				break;
-			}
-		}
-		if(dwResult-WSA_WAIT_EVENT_0==0){
-			WSAEnumNetworkEvents(m_socket->GetSocket(),m_hWSAEvent,&events);
-			switch(events.lNetworkEvents){
-			case FD_CLOSE:
-				break;
-			case FD_READ:
-				m_socket->Recv(&res);
-				break;
-			}
-		}
-	}
-	WSACloseEvent(m_hWSAEvent);
-}
-
-void WSA_Async::Request(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content){
-	Http_Func func;
-	wstring head_str,content_str,send;
-	wstring proto,host,path;
-	
-	func.UrlSplit(url,&proto,&host,&path);
-
-	m_socket=new SSL_Socket();
-	m_socket->Connect(host.c_str());
-
-	func.HeaderJoin(head,&head_str);
-	func.ContentJoin(content,&content_str);
-	func.GetRequestString(cmd,url,head_str.c_str(),content_str.c_str(),&send);
-	m_socket->Send(send.c_str(),send.size());
-}
-
-void WSA_Async::Response(){
-	//Event_Proc();
-	m_hThread=(HANDLE)_beginthreadex(NULL,NULL,CallProc,this,NULL,NULL);
-}
-
-void WSA_Async::Start(){
-}
-
-void WSA_Async::Stop(){
-	WSASetEvent(m_hWSAStop);
+int Socket::Recv_Async(){
+	//async.CallBack(m_socket);
+	return 0 ;
 }
 
 
