@@ -10,8 +10,10 @@ protected:
 public:
 	Window(){}
 	virtual ~Window(){}
-	static ATOM RegisterWC(HINSTANCE,LPCTSTR,int=NULL);
+	static ATOM RegisterWC(HINSTANCE,LPCTSTR);
 	HWND CreateWnd(LPCTSTR,DWORD,int,int,int,int,HWND,HMENU,HINSTANCE);
+
+	HWND AutoRegistCreateWnd(LPCTSTR,DWORD,int,int,int,int,HWND,HMENU,HINSTANCE);
 
 	static LRESULT CALLBACK CallProc(HWND,UINT,WPARAM,LPARAM);
 	virtual LRESULT CALLBACK WindowProc(HWND,UINT,WPARAM,LPARAM)=0;

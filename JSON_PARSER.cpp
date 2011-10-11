@@ -89,6 +89,99 @@ void Value::Set(){
 	Reset();
 	CType=NULL_TYPE;
 }
+
+bool Value::Is(int type){
+	if(type!=CType){
+		false;
+	}
+	return true;
+}
+bool Value::Get_Num(double* res){
+	if(!Is(NUMBER_TYPE)){
+		return false;
+	}
+	*res=data.val_num;
+	return true;
+}
+
+bool Value::Get_Bool(bool *res){
+	if(!Is(BOOL_TYPE)){
+		return false;
+	}
+	*res=data.val_bool;
+	return true;
+}
+
+bool Value::Get_Null(){
+	if(!Is(NULL_TYPE)){
+		return false;
+	}
+	return true;
+}
+
+bool Value::Get_Str(wstring* res){
+	if(!Is(NULL_TYPE)){
+		return false;
+	}
+	*res=*data.val_str;
+	return true;
+}
+
+bool Value::Get_Obj(Json_Obj* res){
+	if(!Is(OBJECT_TYPE)){
+		return false;
+	}
+	res=NULL;
+	*res=*data.val_obj;
+	//*res=*data.val_obj;
+	return true;
+}
+
+bool Value::Get_Arr(Json_Arr* res){
+	if(!Is(ARRAY_TYPE)){
+		return false;
+	}
+	*res=*data.val_arr;
+	return true;
+}
+
+bool Value::Get_ToStr(wstring* res,int *type){
+	if(type!=NULL){
+		*type=CType;
+	}
+	switch(CType){
+	case NUMBER_TYPE:
+		{
+			wstring tmp_str;
+			int tmp_num;
+			int cnt;
+
+			tmp_num=data.val_num;
+			cnt=0;
+			while(1<(tmp_num/=10)){
+				cnt++;
+			}
+			tmp_str.resize(cnt+1);
+			swprintf((wchar_t*)tmp_str.c_str(),tmp_str.capacity(),TEXT("%f"),data.val_num);
+			res->assign(tmp_str);
+		}
+		break;
+	case NULL_TYPE:
+		res->assign(TEXT("null"));
+		break;
+	case BOOL_TYPE:
+		res->assign(data.val_bool==true?TEXT("true"):TEXT("false"));
+		break;
+	case STRING_TYPE:
+		*res=*data.val_str;
+		break;
+	default:
+		return false;
+	}
+	return true;
+}
+
+
 /*
 void Value::copy(Value* dst,Value* src){
 	switch(src->CType){
@@ -312,7 +405,7 @@ bool Json_Parser::Parse_Arr(json_struct*json_str,Json_Arr*res){
 		if(!Parse_Value(json_str,&tmp)){
 			return false;
 		}
-		arr.elements.push_back(tmp);
+		arr.push_back(tmp);
 		if(spcskip(json_str)==','){
 			json_str->inclement();
 			spcskip(json_str);
@@ -463,7 +556,7 @@ bool Json_Parser::Parse_Obj(json_struct*json_str,Json_Obj *res){
 		spcskip(json_str);
 
 		Parse_Value(json_str,&pd.second);
-		obj.elements.push_back(pd);
+		obj.insert(pd);
 
 		if(spcskip(json_str)==','){
 			json_str->inclement();
@@ -502,10 +595,13 @@ bool Json_Parser::Parse_Obj(json_struct*json_str,Json_Obj *res){
 }
 
 
-bool Json_Parser::Parse(wchar_t* src){
+bool Json_Parser::Parse(wchar_t* src,Value* res){
 	json_str.Init(src);
 	//*current=root;*/
-	return Parse_Value(&json_str,&root);
-	
+	if(!Parse_Value(&json_str,&root)){
+		return false;
+	}
+	*res=root;
+	return true;
 }
 

@@ -2,14 +2,29 @@
 
 void Twitter_Api::Followers(){
 	PairDataArray pda;
+	wchar_t*cmd,*url;
+	Value json;
 	wstring res;
-	oauth.SetHeader(TEXT("GET"),TEXT("http://api.twitter.com/1/statuses/friends_timeline.json"));
-	oauth.GetData(&pda);
-	int sc=inet.Auto(TEXT("GET"),TEXT("http://api.twitter.com/1/statuses/friends_timeline.json"),PairDataArray(),pda,&res);
-	json_parser.Parse((wchar_t*)res.c_str());
+	cmd=TEXT("GET");
+	url=TEXT("http://api.twitter.com/1/statuses/friends_timeline.json");
+	//oauth.SetHeader(cmd,url);
+	//oauth.GetData(&pda);
+	oauth.GetHeader(cmd,url,&pda);
+	inet.Request(cmd,url,pda,PairDataArray());
+	inet.Response(&res);
+	json_parser.Parse((wchar_t*)res.c_str(),&json);
+	Json_Arr arr;
+	Json_Obj obj;
+	json.Get_Arr(&arr);
+	arr[0].Get_Obj(&obj);
+	wstring test;
+	obj[TEXT("user")].Get_Obj(&obj);
+	obj[TEXT("name")].Get_ToStr(&test,NULL);
+	MessageBox(NULL,test.c_str(),test.c_str(),MB_OK);
 	int a,b;
 	a=0;
 
+	
 	return;
 }
 
@@ -20,6 +35,8 @@ void Twitter_Api::Update(const wchar_t* text){
 void User_Stream::Start(){
 	wchar_t* cmd,*url;
 	PairDataArray pda;
+	wstring hd;
+	wstring send;
 
 	cmd=TEXT("GET");
 	
@@ -28,14 +45,20 @@ void User_Stream::Start(){
 
 	oauth.SetHeader(cmd,url);
 	oauth.GetData(&pda);
-
+	int i;
+	for(i=0;i<pda.Size();i++){
+		hd.append(pda[i].key).append(TEXT("=")).append(pda[i].data).append(TEXT("&"));
+	}
+	hd.erase(hd.size()-1);
 	//oauth.GetHeader(cmd,url,&pda);
 	//oauth.GetHeader(cmd,url,&pda);
 
 	Inet inet;
-
-	wa.Request(cmd,url,PairDataArray(),pda);
-	wa.Response();
+	send.resize(1400);
+	wsprintf((wchar_t*)send.c_str(),TEXT("%s %s?%s HTTP/1.1\r\nHost:userstream.twitter.com\r\n\r\n"),cmd,url,hd.c_str());
+	wa.Connect(TEXT("userstream.twitter.com"),TEXT("https"));
+	wa.Send(send.c_str(),send.size());
+	wa.Recv(Recv_Callback);
 	//iac.Create(cmd,url,PairDataArray(),pda);
 	//iac.Start();
 	return;
@@ -55,15 +78,20 @@ void User_Stream::Start(){
 }
 
 void User_Stream::Stop(){
-	wa.Stop();
+	wa.EventStop();
 }
 
 void User_Stream::Restart(){
-	wa.Start();
+	wa.EventStart();
 }
 
 void User_Stream::End(){
-	wa.End();
+	wa.EventEnd();
+}
+
+bool User_Stream::Recv_Callback(UINT msg,wchar_t* recv){
+	MessageBox(NULL,recv,NULL,MB_OK);
+	return false;
 }
 /*
 unsigned int CALLBACK User_Stream::Callback(void* lpvoid){

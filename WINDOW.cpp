@@ -2,14 +2,14 @@
 
 Dialog*Dialog::s_pDialog=NULL;
 
-ATOM Window::RegisterWC(HINSTANCE hInst,LPCTSTR Class,int WndEx){
+ATOM Window::RegisterWC(HINSTANCE hInst,LPCTSTR Class){
 	WNDCLASSEX wc;
 
 	wc.cbSize=sizeof(WNDCLASSEX);
 	wc.style=NULL;
 	wc.lpfnWndProc=(WNDPROC)CallProc;
 	wc.cbClsExtra=NULL;
-	wc.cbWndExtra=WndEx;
+	wc.cbWndExtra=NULL;
 	wc.hInstance=hInst;
 	wc.hIcon=(HICON)LoadImage(
 		NULL,MAKEINTRESOURCE(IDI_APPLICATION),IMAGE_ICON,
@@ -48,6 +48,11 @@ HWND Window::CreateWnd(LPCTSTR Class,DWORD Style,int x,int y,int width,int heigh
 	SendMessage(hWnd,WM_SIZE,NULL,MAKELPARAM(rc.right-rc.left,rc.bottom-rc.top));
 	SendMessage(hWnd,WM_SETFOCUS,NULL,NULL);
 	return hWnd;
+}
+
+HWND Window::AutoRegistCreateWnd(LPCTSTR Class,DWORD Style,int x,int y,int width,int height,HWND hParent,HMENU hMenu,HINSTANCE hInst){
+	RegisterWC(hInst,Class);
+	return CreateWnd(Class,Style,x,y,width,height,hParent,hMenu,hInst);
 }
 
 LRESULT Window::CallProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){

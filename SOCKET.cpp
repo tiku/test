@@ -92,7 +92,7 @@ Socket_Base::Socket_Base(){
 }
 
 Socket_Base::~Socket_Base(){
-	Com_Reset();
+	Base_Reset();
 	WSACleanup();
 }
 
@@ -100,7 +100,7 @@ SOCKET Socket_Base::GetSocket(){
 	return m_sock;
 }
 
-void Socket_Base::Com_Reset(){
+void Socket_Base::Base_Reset(){
 	if(m_sock!=NULL){
 		shutdown(m_sock,SD_BOTH);
 		closesocket(m_sock);
@@ -109,13 +109,13 @@ void Socket_Base::Com_Reset(){
 	m_host.clear();
 }
 
-bool Socket_Base::Com_Connect(const wchar_t* host,const wchar_t* serv){
+bool Socket_Base::Base_Connect(const wchar_t* host,const wchar_t* serv){
 	ADDRINFOW hints;
 	ADDRINFOW *addrinfo;
 	wchar_t* port[17];//SHORTの最大値16bit+終端文字1bit;
 	wchar_t* proto=TEXT("tcp");
 
-	Com_Reset();
+	Base_Reset();
 
 	memset(&hints,0,sizeof(hints));//必ず初期化する
 
@@ -143,18 +143,18 @@ EXIT://エラーの場合
 }
 
 
-bool Def_Socket::Connect(const wchar_t* host){
-	return Com_Connect(host,TEXT("http"));
+bool Socket_Base::Connect(const wchar_t* host){
+	return Base_Connect(host,TEXT("http"));
 }
 
 
-int Def_Socket::Send(const wchar_t* w_send,int size){
+int Socket_Base::Send(const wchar_t* w_send,int size){
 	string m_send;
 	WideToMultiChar(w_send,size,&m_send);
 	return send(m_sock,m_send.c_str(),size,0);
 }
 
-int Def_Socket::Recv(wstring* res){
+int Socket_Base::Recv(wstring* res){
 	char tmp[MAX_RECV]={0};
 	int len,prev=0;
 	wstring wtmp;
@@ -165,10 +165,14 @@ int Def_Socket::Recv(wstring* res){
 		//勢い
 		res->resize(len+prev);
 		prev+=MultiByteToWideChar(CP_UTF8,NULL,tmp,len,(wchar_t*)res->c_str()+prev,len);
-		memset(&tmp,0,sizeof(tmp));
-	}while(len==MAX_RECV);
+	}while(len!=0);
 	return len;
 }
+
+void Socket_Base::Reset(){
+	Base_Reset();
+}
+
 
 SSL_Socket::SSL_Socket(){
 	ssl=NULL;
@@ -176,10 +180,11 @@ SSL_Socket::SSL_Socket(){
 }
 
 SSL_Socket::~SSL_Socket(){
-	SSL_Reset();
+	Reset();
 }
 
-void SSL_Socket::SSL_Reset(){
+void SSL_Socket::Reset(){
+	Socket_Base::Base_Reset();
 	if(ssl!=NULL){
 		SSL_shutdown(ssl);
 		SSL_free(ssl);
@@ -193,9 +198,9 @@ void SSL_Socket::SSL_Reset(){
 
 bool SSL_Socket::Connect(const wchar_t* host){
 	int i,err;
-	Com_Connect(host,TEXT("https"));
-
-	SSL_Reset();
+	
+	Reset();
+	Base_Connect(host,TEXT("https"));
 
 	SSL_library_init();
 	SSL_load_error_strings();
@@ -242,129 +247,6 @@ int SSL_Socket::Recv(wstring* res){
 }
 
 
-unsigned int CALLBACK WSA_Async::CallProc(void* arg){
-	return ((WSA_Async*)arg)->ThreadProc(NULL);
-}
-
-unsigned int CALLBACK WSA_Async::ThreadProc(void* arg){
-	Event_Proc();
-	Start();
-	CloseHandle(m_hThread);
-	_endthreadex(0);
-	return 0;
-}
-
-void WSA_Async::CreateEvents(){
-	m_hWSAStart=WSACreateEvent();
-	m_hWSAStop=WSACreateEvent();
-	m_hWSAExit=WSACreateEvent();
-	m_hWSADone=WSACreateEvent();
-}
-
-void WSA_Async::CloseEvents(){
-	CloseHandle(m_hWSAStart);
-	CloseHandle(m_hWSAStop);
-	CloseHandle(m_hWSAExit);
-	CloseHandle(m_hWSADone);
-}
-
-
-void WSA_Async::Event_Proc(){
-	enum{WSA_EVENT_NET,WSA_EVENT_STOP,WSA_EVENT_EXIT,EVENTS_SIZE};
-	wstring res;
-	WSANETWORKEVENTS events;
-	DWORD dwResult;
-
-	m_hWSAEvent=WSACreateEvent();
-	WSAEventSelect(m_socket->GetSocket(),m_hWSAEvent,FD_READ|FD_CLOSE);
-	HANDLE hWSAEvents[EVENTS_SIZE];
-	hWSAEvents[WSA_EVENT_NET]=m_hWSAEvent;
-	hWSAEvents[WSA_EVENT_STOP]=m_hWSAStop;
-	hWSAEvents[WSA_EVENT_EXIT]=m_hWSAExit;
-
-	while(1){
-		dwResult=WSAWaitForMultipleEvents(EVENTS_SIZE,hWSAEvents,FALSE,WSA_INFINITE,FALSE);
-		if(dwResult==WSA_WAIT_FAILED){
-			break;
-		}
-		dwResult-=WSA_WAIT_EVENT_0;
-		switch(dwResult){
-		case WSA_EVENT_EXIT:
-			goto END;
-		case WSA_EVENT_STOP:
-			WSAResetEvent(m_hWSAStop);
-			if(WSAWaitForMultipleEvents(1,&m_hWSAStart,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
-				goto END;
-			}
-			WSAResetEvent(m_hWSAStart);
-			WSAResetEvent(m_hWSAStop);
-			WSAResetEvent(m_hWSAExit);
-			break;
-		case WSA_EVENT_NET:
-			WSAEnumNetworkEvents(m_socket->GetSocket(),m_hWSAEvent,&events);
-			switch(events.lNetworkEvents){
-			case FD_CLOSE:
-				goto END;
-			case FD_READ:
-				//m_socket->Recv(&res);
-				break;
-			}
-			break;
-		}
-		WSAResetEvent(hWSAEvents[dwResult]);
-	}
-END:
-	
-	WSASetEvent(m_hWSADone);
-	WSACloseEvent(m_hWSAEvent);
-}
-
-void WSA_Async::Request(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content){
-	Http_Func func;
-	wstring head_str,content_str,send;
-	wstring proto,host,path;
-	
-	func.UrlSplit(url,&proto,&host,&path);
-
-	m_socket=new SSL_Socket();
-	m_socket->Connect(host.c_str());
-
-	func.HeaderJoin(head,&head_str);
-	func.ContentJoin(content,&content_str);
-	func.GetRequestString(cmd,url,head_str.c_str(),content_str.c_str(),&send);
-	m_socket->Send(send.c_str(),send.size());
-}
-
-void WSA_Async::Response(){
-	//Event_Proc();
-	m_hThread=(HANDLE)_beginthreadex(NULL,NULL,CallProc,this,NULL,NULL);
-}
-
-void WSA_Async::Start(){
-	if(m_hThread==NULL){
-		return;
-	}
-	WSASetEvent(m_hWSAStart);
-}
-
-void WSA_Async::Stop(){
-	if(m_hThread==NULL){
-		return;
-	}
-	WSASetEvent(m_hWSAStop);
-}
-
-void WSA_Async::End(){
-	if(m_hThread==NULL){
-		return;
-	}
-	SetEvent(m_hWSAStart);
-	SetEvent(m_hWSAExit);
-	WaitForSingleObject(m_hThread,INFINITE);
-	m_hThread=NULL;
-}
-
-
 Socket::Socket(){
 	m_socket=NULL;
 }
@@ -384,7 +266,7 @@ bool Socket::Connect(const wchar_t* host,const wchar_t* proto){
 	Reset();
 
 	if(wcscmp(proto,TEXT("http"))==0){
-		m_socket=new Def_Socket();
+		m_socket=new Socket_Base();
 	}else if(wcscmp(proto,TEXT("https"))==0){
 		m_socket=new SSL_Socket();
 	}
@@ -399,9 +281,157 @@ int Socket::Recv(wstring* res){
 	return m_socket->Recv(res);
 }
 
-int Socket::Recv_Async(){
-	//async.CallBack(m_socket);
-	return 0 ;
+
+WSA_Async::WSA_Async(){
+	m_socket=NULL;
+	m_call=NULL;
+	pause=false;
+	running=false;
+	m_hThread=NULL;
+	m_hWSAEvent=NULL;
+	m_hEvent=WSACreateEvent();
+}
+
+WSA_Async::~WSA_Async(){
+	EventEnd();
+	WSACloseEvent(m_hEvent);
+}
+
+void WSA_Async::Reset(){
+	EventEnd();
+	if(m_socket){
+		delete m_socket;
+		m_socket=NULL;
+	}
+}
+
+bool WSA_Async::Connect(const wchar_t* host,const wchar_t* proto){
+	Reset();
+	if(wcscmp(proto,TEXT("http"))==0){
+		m_socket=new Socket_Base();
+	}else if(wcscmp(proto,TEXT("https"))==0){
+		m_socket=new SSL_Socket();
+	}else{
+		MessageBox(NULL,TEXT("サポートしていません"),TEXT("CONNECT"),MB_OK);
+	}
+	return m_socket->Connect(host);
+}
+
+int WSA_Async::Send(const wchar_t* send,int size){
+	return m_socket->Send(send,size);
+}
+
+int WSA_Async::Recv(ASYNC_CALLBACK call){
+	ThreadStart(call);
+	return 0;
+}
+
+
+unsigned int CALLBACK WSA_Async::CallProc(void* arg){
+	return ((WSA_Async*)arg)->ThreadProc(NULL);
+}
+
+unsigned int CALLBACK WSA_Async::ThreadProc(void* arg){
+	Event_Proc();
+	_endthreadex(0);
+	return 0;
+}
+
+
+void WSA_Async::Event_Proc(){
+	enum{NETWORK_EVENT=0,SYSTEM_EVENT,SIZE};
+	wstring res;
+	WSANETWORKEVENTS events;
+	DWORD dwResult;
+
+	m_hWSAEvent=WSACreateEvent();
+	WSAEventSelect(m_socket->GetSocket(),m_hWSAEvent,FD_READ|FD_CLOSE);
+
+	HANDLE hWSAEvents[SIZE];
+	hWSAEvents[NETWORK_EVENT]=m_hWSAEvent;
+	hWSAEvents[SYSTEM_EVENT]=m_hEvent;
+
+	while(running){
+		dwResult=WSAWaitForMultipleEvents(SIZE,hWSAEvents,FALSE,WSA_INFINITE,FALSE);
+		if(dwResult==WSA_WAIT_FAILED){
+			break;
+		}
+		dwResult-=WSA_WAIT_EVENT_0;
+		WSAResetEvent(hWSAEvents[dwResult]);
+
+		if(dwResult==SYSTEM_EVENT){
+			while(pause&&running){
+				if(WSAWaitForMultipleEvents(1,&m_hEvent,FALSE,WSA_INFINITE,FALSE)==WSA_WAIT_FAILED){
+					break;
+				}
+				WSAResetEvent(m_hEvent);
+			}
+		}else{
+			wstring read;
+			read.clear();
+			WSAEnumNetworkEvents(m_socket->GetSocket(),m_hWSAEvent,&events);
+			switch(events.lNetworkEvents){
+			case FD_READ:
+				m_socket->Recv(&read);
+				m_call(events.lNetworkEvents,(wchar_t*)read.c_str());
+				break;
+			case FD_CLOSE:
+				m_socket->Reset();
+				m_call(events.lNetworkEvents,TEXT(""));
+				running=false;
+				break;
+			}
+		}
+	}
+END:
+	running=false;
+	pause=false;
+	WSAResetEvent(m_hEvent);
+	WSACloseEvent(m_hWSAEvent);
+}
+
+void WSA_Async::ThreadStart(ASYNC_CALLBACK call){
+	if(running){
+		return;
+	}
+	if(m_hThread){
+		CloseHandle(m_hThread);
+		m_hThread=NULL;
+	}
+	pause=false;
+	running=true;
+	m_call=call;
+	m_hThread=(HANDLE)_beginthreadex(NULL,NULL,CallProc,this,NULL,NULL);
+	return;
+}
+
+void WSA_Async::EventStart(){
+	if(!running){
+		return;
+	}
+	pause=false;
+	WSASetEvent(m_hEvent);
+}
+
+void WSA_Async::EventStop(){
+	if(!running){
+		return;
+	}
+	pause=true;
+	WSASetEvent(m_hEvent);
+}
+
+void WSA_Async::EventEnd(){
+	if(!m_hThread){
+		return;
+	}
+	if(running){
+		running=false;
+		SetEvent(m_hEvent);
+		WaitForSingleObject(m_hThread,INFINITE);
+	}
+	CloseHandle(m_hThread);
+	m_hThread=NULL;
 }
 
 
@@ -568,8 +598,11 @@ bool Inet::Async_Connect(const wchar_t* host){
 bool Inet::Request(const wchar_t* cmd,const wchar_t* url,PairDataArray head,PairDataArray content){
 	wstring res;
 	wstring  head_str,content_str;
+	wstring proto,host,path;
 
-	
+	m_func.UrlSplit(url,&proto,&host,&path);
+	Connect(host.c_str(),proto.c_str());
+
 	SetDefaultHeader(&head);
 	
 	m_func.HeaderJoin(head,&head_str);
@@ -588,6 +621,7 @@ int Inet::Response(wstring* res){
 	m_socket.Recv(&m_response);
 	ResponseSplit(m_response.c_str(),&status,&head,&content);
 	
+	*res=content;
 	if(!StatusCodeAnalysis(status.c_str(),&scode)){
 		return false;
 	}
@@ -597,24 +631,27 @@ int Inet::Response(wstring* res){
 	if(wcscmp(head_data[TEXT("Connection")],TEXT("Keep-Alive"))!=0){
 		//Reset();
 	}
-	*res=content;
 	return scode;
 }
 
 bool Inet::ResponseSplit(const wchar_t* response,wstring* status,wstring* head,wstring* content){
-	const wchar_t* resp;
-	int size;
+	const wchar_t* end;
+	const wchar_t* beg;
 
-	resp=response;
-	size=(wcsstr(resp,TEXT("\r\n"))-resp)+lstrlen(TEXT("\r\n"));
-	status->assign(resp,size);
+	beg=response;
+	if((end=wcsstr(beg,TEXT("\r\n")))==NULL){
+		return false;
+	}
+	status->assign(beg,end-beg);
+	beg=end+lstrlen(TEXT("\r\n"));
 
-	resp+=size;
-	size=(wcsstr(resp,TEXT("\r\n\r\n"))-resp)+lstrlen(TEXT("\r\n\r\n"));
-	head->assign(resp,size);
+	if((end=wcsstr(beg,TEXT("\r\n\r\n")))==NULL){
+		return false;
+	}
+	head->assign(beg,end-beg);
+	beg=end+lstrlen(TEXT("\r\n\r\n"));
 
-	resp+=size;
-	content->assign(resp);
+	content->assign(beg);
 	return true;
 }
 
@@ -639,6 +676,7 @@ bool Inet::StatusCodeAnalysis(wstring sctext,int* res){
 bool Inet::HeadAnalysis(const wchar_t* hdtext,PairDataArray*res){
 	const wchar_t* ptr,*p;
 	int i,pos;
+	const wchar_t *beg,*end;
 	PairData pair;
 	PairDataArray res_tmp;
 
@@ -647,21 +685,21 @@ bool Inet::HeadAnalysis(const wchar_t* hdtext,PairDataArray*res){
 	}
 	res->Clear();
 	ptr=hdtext;
+	beg=hdtext;
 	do{
 		pair.Set(TEXT(""),TEXT(""));
-		if((p=wcsstr(ptr,TEXT(":")))==NULL){
-			return false;
-		}
-		pos=p-ptr;
-		pair.key.assign(ptr,pos);
-		ptr+=pos+lstrlen(TEXT(":"));
 
-		if((p=wcsstr(ptr,TEXT("\r\n")))==NULL){
+		if((end=wcsstr(beg,TEXT(":")))==NULL){
 			return false;
 		}
-		pos=p-ptr;
-		pair.data.assign(ptr,pos);
-		ptr+=pos+lstrlen(TEXT("\r\n"));
+		pair.key.assign(beg,end-beg);
+		beg=end+lstrlen(TEXT(":"));
+
+		if((end=wcsstr(beg,TEXT("\r\n")))==NULL){
+			return false;
+		}
+		pair.data.assign(beg,end-beg);
+		beg=end+lstrlen(TEXT("\r\n"));
 
 		while(pair.key[max(0,pair.key.size()-1)]==' '){
 			pair.key.erase(pair.key.size()-1);
@@ -671,7 +709,7 @@ bool Inet::HeadAnalysis(const wchar_t* hdtext,PairDataArray*res){
 		}
 
 		res_tmp.Insert(pair.key.c_str(),pair.data.c_str());
-	}while(wcsncmp(ptr,TEXT("\r\n"),lstrlen(TEXT("\r\n")))!=0);
+	}while(wcsncmp(beg,TEXT("\r\n"),lstrlen(TEXT("\r\n")))!=0&&beg!='\0');
 	*res=res_tmp;
 	return true;
 }

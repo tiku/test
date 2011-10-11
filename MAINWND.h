@@ -11,13 +11,6 @@ public:
 	MainWindow(HINSTANCE);
 	LRESULT CALLBACK WindowProc(HWND,UINT,WPARAM,LPARAM);
 
-	static DWORD CALLBACK test(wchar_t* str){
-		Json_Parser jp;
-		jp.Parse(wcschr(str,'{'));
-		int a;
-		a=0;
-		return a;
-	};
 };
 
 #endif

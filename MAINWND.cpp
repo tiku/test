@@ -4,6 +4,7 @@
 #include"XML_PARSER.h"
 #include "TWITTER_API.h"
 #include "JSON_PARSER.h"
+#include "MAIN_VIEWER.h"
 
 MainWindow::MainWindow(HINSTANCE hInst){
 	wchar_t *name=TEXT("MAIN");
@@ -30,7 +31,8 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 		switch(wp){
 		case 401:
 			{
-				us.Stop();
+				us.Start();
+				//us.Stop();
 				//us.Start2();
 				//Json_Parser jp;
 				//jp.Parse(NULL);
@@ -40,7 +42,9 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 			break;
 		case 402:
 			{
-				us.Start();
+				static Main_Viewer a;
+				a.Create(hWnd);
+				break;;
 				/*wchar_t* host=TEXT("api.twitter.com");
 				wchar_t* cmd=TEXT("GET");
 				wchar_t* path=TEXT("/1/statuses/friends_timeline.json");
@@ -58,6 +62,11 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 		case 404:
 			us.End();
 			break;
+		case 405:
+			{
+				Twitter_Api api;
+				api.Followers();
+			}
 		}
 	}
 	return DefWindowProc(hWnd,msg,wp,lp);

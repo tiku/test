@@ -38,7 +38,7 @@ using namespace WChar;
 
 class Inet;
 
-typedef bool(CALLBACK* ASYNC_CALLBACK)(Inet*);
+typedef bool(CALLBACK* ASYNC_CALLBACK)(UINT,wchar_t*);
 
 struct PairData{
 	wstring key;
@@ -82,26 +82,18 @@ protected:
 	SOCKET m_sock;
 	wstring m_host;
 
-	bool Com_Connect(const wchar_t*,const wchar_t*);
-	void Com_Reset();
+	bool Base_Connect(const wchar_t*,const wchar_t*);
+	void Base_Reset();
 public:
 	Socket_Base();
 	virtual ~Socket_Base();
 
+	virtual void Reset();
+	virtual bool Connect(const wchar_t*);
+	virtual int Send(const wchar_t*,int);
+	virtual int Recv(wstring*);
+	
 	SOCKET GetSocket();
-
-	virtual bool Connect(const wchar_t*)=0;
-	virtual int Send(const wchar_t*,int)=0;
-	virtual int Recv(wstring*)=0;
-};
-
-
-
-class Def_Socket:public Socket_Base{
-public:
-	bool Connect(const wchar_t*);
-	int Send(const wchar_t*,int);
-	int Recv(wstring*);
 };
 
 
@@ -109,75 +101,61 @@ class SSL_Socket:public Socket_Base{
 private:
 	SSL *ssl;
 	SSL_CTX *ctx;
-
-	void SSL_Reset();
 public:
 	SSL_Socket();
 	~SSL_Socket();
 
+	void Reset();
 	bool Connect(const wchar_t*);
 	int Send(const wchar_t*,int);
 	int Recv(wstring*);
 };
 
 
+class Socket{
+private:
+	Socket_Base* m_socket;
+public:
+	Socket();
+	~Socket();
+
+	void Reset();
+
+	bool Connect(const wchar_t*,const wchar_t*);
+	int Send(const wchar_t*,int);
+	int Recv(wstring*);
+};
+
 
 class WSA_Async{
 private:
 	HANDLE m_hThread;
 	HANDLE m_hWSAEvent;
-	HANDLE m_hWSAStop,m_hWSAExit,m_hWSAStart,m_hWSADone;
-	Socket_Base* m_socket;
+	HANDLE m_hEvent;
+	bool pause;
+	bool running;
 
-	void CreateEvents();
-	void CloseEvents();
+	Socket_Base* m_socket;
+	ASYNC_CALLBACK m_call;
+	
+	void ThreadStart(ASYNC_CALLBACK);
 
 	void Event_Proc();
 	
 	static unsigned int CALLBACK CallProc(void*);
 	unsigned int CALLBACK ThreadProc(void*);
 public:
-	WSA_Async(){
-		m_hWSAEvent=NULL;
-		m_hWSAStop=NULL;
-		m_hWSAExit=NULL;
-		m_hWSADone=NULL;
-		m_hWSAStart=NULL;
-		CreateEvents();
-	}
-	~WSA_Async(){
-		SetEvent(m_hWSAStart);
-		SetEvent(m_hWSAExit);
-		WaitForSingleObject(m_hThread,INFINITE);
-		CloseEvents();
-	}
-
-	void Stop();
-	void Start();
-	void End();
-
-	void CallBack(const Socket_Base*);
-
-	void Request(const wchar_t*,const wchar_t*,PairDataArray,PairDataArray);
-	void Response();
-};
-
-
-
-class Socket{
-private:
-	Socket_Base* m_socket;
-	WSA_Async async;
+	WSA_Async();
+	~WSA_Async();
 
 	void Reset();
-public:
-	Socket();
-	~Socket();
-
 	bool Connect(const wchar_t*,const wchar_t*);
 	int Send(const wchar_t*,int);
-	int Recv(wstring*);
-	int Recv_Async();
+	int Recv(ASYNC_CALLBACK);
+
+	void EventStart();
+	void EventStop();
+	void EventEnd();
 };
 
 
@@ -193,6 +171,11 @@ public:
 	bool UrlEncode(const wchar_t*,wstring*);
 	void HeaderJoin(PairDataArray,wstring*);
 	void ContentJoin(PairDataArray,wstring*);
+
+	bool StatusCodeAnalysis(wstring,int*);
+	bool HeadAnalysis(const wchar_t*,PairDataArray*);
+	bool ResponseSplit(const wchar_t*,wstring*,wstring*,wstring*);
+
 };
 
 
@@ -213,6 +196,7 @@ public:
 	bool Async_Connect(const wchar_t*);
 	bool Request(const wchar_t*,const wchar_t*,PairDataArray,PairDataArray);
 	int Response(wstring*);
+	bool Response_Async(ASYNC_CALLBACK);
 
 	bool StatusCodeAnalysis(wstring,int*);
 	bool HeadAnalysis(const wchar_t*,PairDataArray*);

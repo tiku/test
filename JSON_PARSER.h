@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <stack>
+#include <map>
 
 using namespace std;
 
@@ -26,11 +27,11 @@ http://coderepos.org/share/browser/lang/cplusplus/picojson/trunk/picojson.h#L232
 #define SYNTAX_TRUE		TEXT("true")
 #define SYNTAX_FALSE	TEXT("false")
 
-
-class Json_Obj;
-class Json_Arr;
+#define Json_Obj map<wstring,Value>
+#define Json_Arr vector<Value>
 
 class Value{
+private:
 	enum{NULL_TYPE,NUMBER_TYPE,BOOL_TYPE,STRING_TYPE,OBJECT_TYPE,ARRAY_TYPE};
 	union data_union{
 		double val_num;
@@ -38,8 +39,6 @@ class Value{
 		wstring* val_str;
 		Json_Obj* val_obj;
 		Json_Arr* val_arr;
-		//vector<pair<wstring,Value>>* val_obj;
-		//vector<Value>* val_arr;
 	};
 	data_union data;
 	int CType;
@@ -61,24 +60,15 @@ public:
 	void Set(Json_Obj obj);
 	void Set(Json_Arr arr);
 	template<class T>bool Get(T*); 
-	bool Is(int,void*);
-	bool Get(double*);
-	bool Get(bool*);
-	bool Get();
-	bool Get(wstring*);
-	bool Get(Json_Obj*);
-	bool Get(Json_Arr*);
+	bool Is(int);
+	bool Get_Num(double*);
+	bool Get_Bool(bool*);
+	bool Get_Null();
+	bool Get_Str(wstring*);
+	bool Get_Obj(Json_Obj*);
+	bool Get_Arr(Json_Arr*);
+	bool Get_ToStr(wstring*,int*);
 	void copy(Value* dst,Value* src);
-};
-
-class Json_Obj{
-public:
-	vector<pair<wstring,Value>> elements;
-};
-
-class Json_Arr{
-public:
-	vector<Value> elements;
 };
 
 typedef pair<wstring,wstring> JSON_PairData;
@@ -155,7 +145,7 @@ class Json_Parser{
 	}
 public:
 	//~Json_Parser();
-	bool Parse(wchar_t*);
+	bool Parse(wchar_t*,Value*);
 };
 
 #endif

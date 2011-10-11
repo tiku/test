@@ -31,6 +31,7 @@ public:
 	void Stop();
 	void Restart();
 	void End();
+	static bool CALLBACK Recv_Callback(UINT,wchar_t*);
 	//void Start2(){iac.Start();}
 	//static unsigned int CALLBACK Callback(void*);
 //	unsigned CALLBACK Event_Function(void*);
