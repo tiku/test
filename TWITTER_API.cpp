@@ -90,6 +90,9 @@ void User_Stream::End(){
 }
 
 bool User_Stream::Recv_Callback(UINT msg,wchar_t* recv){
+	Json_Parser jp;
+	Value json;
+	jp.Parse(recv,&json);
 	MessageBox(NULL,recv,NULL,MB_OK);
 	return false;
 }
