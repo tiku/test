@@ -44,6 +44,7 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp){
 			{
 				static Main_Viewer a;
 				a.Create(hWnd);
+				
 				break;;
 				/*wchar_t* host=TEXT("api.twitter.com");
 				wchar_t* cmd=TEXT("GET");
