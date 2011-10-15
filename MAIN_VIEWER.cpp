@@ -297,6 +297,28 @@ LRESULT CALLBACK Main_Viewer::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp)
 	static DrawTemplate dt;
 	switch(msg){
 	case WM_CREATE:
+		{
+			text_data td[10000];
+			int i;
+			for(i=0;i<10000;i++){
+			//	td[i].AddChild(TEXT("a"));
+				td[i].SetFont(30,TEXT("メイリオ"),true,true,true);
+				td[i].SetColor(RGB(0XFF,0XFF,0XFF),RGB(0XAA,0XAA,0XAA));
+			//	td[i][TEXT("a")].AddChild(TEXT("b"));
+			//	td[i][TEXT("a")].AddChild(TEXT("c"));
+			//	td[i][TEXT("a")].SetFont(29,TEXT("メイリオ"),false,false,false);
+			//	td[i][TEXT("a")][TEXT("b")].SetFont(30,TEXT("ＭＳゴシック"),true,false,false);
+			}
+			MessageBox(NULL,NULL,NULL,NULL);
+		}
+		{
+			area_data ad[10000];
+			int i=0;
+			for(i=0;i<10000;i++){
+				ad[i].SetFont(30,TEXT("メイリオ"),true,true,true);
+			}
+			MessageBox(NULL,NULL,NULL,NULL);
+		}
 		return 0;
 	case WM_MOUSEMOVE:
 		return 0;
