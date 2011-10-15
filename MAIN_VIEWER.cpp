@@ -1,6 +1,117 @@
 #include "MAIN_VIEWER.h"
 
 
+void area_data::SetFont(int n_size,const wchar_t* face,bool b_italic,bool b_underline,bool b_strike){
+	LOGFONT lf;
+	memset(&lf,0,sizeof(lf));
+	lf.lfHeight=n_size;
+	lf.lfItalic=b_italic;
+	lf.lfUnderline=b_underline;
+	lf.lfStrikeOut=b_strike;
+	lstrcpyn(lf.lfFaceName,face,sizeof(lf.lfFaceName)/sizeof(wchar_t));
+
+	SetFontDirect(&lf);
+	return;
+}
+
+void area_data::SetFontDirect(LOGFONT *lf){
+	if(m_hFont){
+		DeleteObject(m_hFont);
+		m_hFont=NULL;
+	}
+	if(lf){
+		m_hFont=CreateFontIndirect(lf);
+	}
+	return;
+}
+
+void area_data::SetColor(COLORREF tx,COLORREF bk){
+	text_color=tx;
+	bk_color=bk;
+	return;
+}
+
+void area_data::Area_Set(int begin,int end){
+	m_area.assign(1,pair<int,int>(begin,end));
+}
+
+void area_data::Area_And(int begin,int end){
+	if(end<=begin){
+		return;
+	}
+	vector<pair<int,int>>::iterator itr;
+	pair<int,int>tmp;
+
+	for(itr=m_area.begin();itr!=m_area.end();){
+		if(begin<itr->second&&itr->first<end){
+			itr->first=max(itr->first,begin);
+			itr->second=min(itr->second,end);
+			itr++;
+		}else{
+			itr=m_area.erase(itr);
+		}
+	}
+}
+
+void area_data::Area_Not(int begin,int end){
+	if(end<=begin){
+		return;
+	}
+	vector<pair<int,int>>::iterator itr;
+	pair<int,int> tmp;
+	
+	for(itr=m_area.begin();itr!=m_area.end();){
+		if(begin<(*itr).second&&(*itr).first<end){
+			tmp=*itr;
+			itr=m_area.erase(itr);
+			if(tmp.first<begin){
+				itr=m_area.insert(itr,pair<int,int>(tmp.first,begin));
+				itr++;
+			}
+			if(end<tmp.second){
+				itr=m_area.insert(itr,pair<int,int>(end,tmp.second));
+				itr++;
+			}
+		}else{
+			itr++;
+		}
+	}
+}
+
+void area_data::Area_Or(int begin,int end){
+	if(end<=begin){
+		return;
+	}
+	vector<pair<int,int>>::iterator itr;
+	pair<int,int> tmp,result;
+
+	result.first=begin;
+	result.second=end;
+
+	for(itr=m_area.begin();itr!=m_area.end();){
+		if(result.first<itr->second&&itr->first<result.second){
+			tmp=*itr;
+			itr=m_area.erase(itr);
+			result.first=min(result.first,tmp.first);
+			result.second=max(result.second,tmp.second);
+		}else{
+			itr++;
+		}
+	}
+	m_area.push_back(result);
+}
+
+void area_data::Draw(HDC hdc){
+	HFONT oldfont;
+	oldfont=(HFONT)GetObject(hdc,sizeof(HFONT),&oldfont);
+
+	SelectObject(hdc,m_hFont);
+	SetBkColor(hdc,bk_color);
+	SetTextColor(hdc,text_color);
+
+}
+
+
 DrawTextData::DrawTextData(){
 	m_hFont=NULL;
 	m_text.clear();
@@ -52,15 +163,15 @@ void DrawTextData::SetText(const wchar_t* text){
 
 void DrawTextData::Draw(HDC hdc){
 	SetBkMode(hdc,TRANSPARENT);
-	TextOut(hdc,m_rc.left,m_rc.top,m_text.c_str(),m_text.size());
+
 	return;
 }
 
 void DrawTextData::SetNewArea(int begin,int end,const wchar_t* id_str){
-	vector<pair<int,int>> areas=m_areas[id_str].areas;
+	vector<pair<int,int>> areas=m_areas[id_str].m_area;
 	areas.clear();
 	areas.push_back(pair<int,int>(begin,end));
-	m_areas[id_str].areas=areas;
+	m_areas[id_str].m_area=areas;
 }
 
 void DrawTextData::Area_Not(int begin,int end,const wchar_t* id_str){
@@ -72,9 +183,8 @@ void DrawTextData::Area_Not(int begin,int end,const wchar_t* id_str){
 	if(end<=begin){
 		return;
 	}
-	vector<pair<int,int>> *areas=&m_areas[id_str].areas;
+	vector<pair<int,int>> *areas=&m_areas[id_str].m_area;
 	vector<pair<int,int>>::iterator itr;
-	int i;
 	pair<int,int> tmp;
 	
 	for(itr=areas->begin();itr!=areas->end();){
@@ -93,28 +203,6 @@ void DrawTextData::Area_Not(int begin,int end,const wchar_t* id_str){
 			itr++;
 		}
 	}
-	/*
-	vector<pair<int,int>> areas=m_areas[id_str].areas;
-	int i;
-	pair<int,int> tmp;
-	
-	for(i=0;i<areas.size();){
-		if(begin<areas[i].second&&areas[i].first<end){
-			tmp=areas[i];
-			areas.erase(areas.begin()+i);
-			if(tmp.first<begin){
-				areas.insert(areas.begin()+i,pair<int,int>(tmp.first,begin));
-				i++;
-			}
-			if(end<tmp.second){
-				areas.insert(areas.begin()+i,pair<int,int>(end,tmp.second));
-				i++;
-			}
-		}else{
-			i++;
-		}
-	}
-	*/
 	return;
 }
 
@@ -125,12 +213,12 @@ void DrawTextData::Area_Or(int begin,int end,const wchar_t* id_str){
 	if(end<=begin){
 		return;
 	}
-	vector<pair<int,int>> *areas=&m_areas[id_str].areas;
+	vector<pair<int,int>> *areas=&m_areas[id_str].m_area;
 	vector<pair<int,int>>::iterator itr;
 	pair<int,int> tmp,result;
 	result.first=begin;
 	result.second=end;
-	int i;
+
 	for(itr=areas->begin();itr!=areas->end();){
 		if(result.first<itr->second&&itr->first<result.second){
 			tmp=*itr;
@@ -142,24 +230,29 @@ void DrawTextData::Area_Or(int begin,int end,const wchar_t* id_str){
 		}
 	}
 	areas->push_back(result);
-	/*
-	vector<pair<int,int>> areas=m_areas[id_str].areas;
-	pair<int,int> tmp,result;
-	result.first=begin;
-	result.second=end;
-	int i;
-	for(i=0;i<areas.size();){
-		if(result.first<areas[i].second&&areas[i].first<result.second){
-			tmp=areas[i];
-			areas.erase(areas.begin()+i);
-			result.first=min(result.first,tmp.first);
-			result.second=max(result.second,tmp.second);
+	return;
+}
+
+void DrawTextData::Area_And(int begin,int end,const wchar_t* id_str){
+	if(m_areas.count(id_str)==0){
+		return;
+	}
+	if(end<=begin){
+		return;
+	}
+	vector<pair<int,int>> *areas=&m_areas[id_str].m_area;
+	vector<pair<int,int>>::iterator itr;
+	pair<int,int>tmp;
+
+	for(itr=areas->begin();itr!=areas->end();){
+		if(begin<itr->second&&itr->first<end){
+			itr->first=max(itr->first,begin);
+			itr->second=min(itr->second,end);
+			itr++;
 		}else{
-			i++;
+			itr=areas->erase(itr);
 		}
 	}
-	areas.push_back(result);
-	*/
 	return;
 }
 
@@ -204,12 +297,6 @@ LRESULT CALLBACK Main_Viewer::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp)
 	static DrawTemplate dt;
 	switch(msg){
 	case WM_CREATE:
-		{
-			DrawTextData dtd;
-			dtd.SetNewArea(0,3,TEXT("a"));
-			dtd.Area_Or(2,9,TEXT("a"));
-			dtd.Area_Not(4,6,TEXT("a"));
-		}
 		return 0;
 	case WM_MOUSEMOVE:
 		return 0;
