@@ -298,17 +298,18 @@ LRESULT CALLBACK Main_Viewer::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp)
 	switch(msg){
 	case WM_CREATE:
 		{
-			text_data td[10000];
-			int i;
-			for(i=0;i<10000;i++){
-			//	td[i].AddChild(TEXT("a"));
-				td[i].SetFont(30,TEXT("メイリオ"),true,true,true);
-				td[i].SetColor(RGB(0XFF,0XFF,0XFF),RGB(0XAA,0XAA,0XAA));
-			//	td[i][TEXT("a")].AddChild(TEXT("b"));
-			//	td[i][TEXT("a")].AddChild(TEXT("c"));
-			//	td[i][TEXT("a")].SetFont(29,TEXT("メイリオ"),false,false,false);
-			//	td[i][TEXT("a")][TEXT("b")].SetFont(30,TEXT("ＭＳゴシック"),true,false,false);
-			}
+			text_draw td;
+			td.m_data.SetArea(0,15);
+			td.m_data.AddChild(TEXT("a"));
+			td.m_data[TEXT("a")].SetArea(3,10);
+			td.m_data[TEXT("a")].SetFont(30,TEXT("メイリオ"),false,false,false);
+			td.m_data.AddChild(TEXT("b"));
+			td.m_data[TEXT("b")].SetArea(11,13);
+			td.m_data[TEXT("a")].AddChild(TEXT("c"));
+			td.m_data[TEXT("a")][TEXT("c")].SetArea(6,8);
+			PAINTSTRUCT ps;
+			HDC hdc=BeginPaint(hWnd,&ps);
+			td.Draw(hdc);
 			MessageBox(NULL,NULL,NULL,NULL);
 		}
 		{

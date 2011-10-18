@@ -8,6 +8,65 @@
 
 using namespace std;
 
+struct draw_font_data{
+	int begin,end;
+	HFONT hFont;
+	COLORREF back,text;
+};
+
+class area_data{
+protected:
+public:
+	vector<pair<int,int>> m_area;
+	HFONT m_hFont;
+	COLORREF bk_color,text_color;
+public:
+	void Area_Set(int beg,int end);
+	void Area_Not(int,int);
+	void Area_Or(int,int);
+	void Area_And(int,int);
+	void SetFont(int,const wchar_t*,bool,bool,bool);
+	void SetFontDirect(LOGFONT*);
+	void SetColor(COLORREF,COLORREF);
+	void Draw(HDC);
+};
+
+class area_root:public area_data{
+	wstring m_text;
+};
+
+class data:public area_data{
+private:
+	map<wstring,data*> m_child;
+public:
+	~data(){
+		map<wstring,data*>::iterator itr;
+		for(itr=m_child.begin();itr!=m_child.end();itr++){
+			delete itr->second;
+		}
+	}
+	data& operator [](const wchar_t* index){
+		return *m_child[index];
+	}
+	bool AddChild(const wchar_t* id_str){
+		if(m_child.count(id_str)!=0){
+			return false;
+		}
+		m_child.insert(pair<wstring,data*>(id_str,new data()));
+		return true;
+	}
+	void GetDrawData(vector<draw_font_data> res){
+		map<wstring,data*>::iterator itr;
+		for(itr=m_child.begin();itr!=m_child.end();itr++){
+			
+		}
+	}
+
+};
+
+
+
+
 class data_color{
 public:
 	int begin,end;
@@ -18,6 +77,14 @@ class data_font{
 public:
 	int begin,end;
 	HFONT hFont;
+};
+
+struct text_data_struct{
+	int begin,end;
+	HFONT hFont;
+	COLORREF m_bk,color,m_text_color;
+	text_data_struct* parent;
+	map<wstring,text_data_struct*>child;
 };
 
 class text_data{
@@ -31,6 +98,9 @@ protected:
 public:
 	text_data(){
 		m_parent=NULL;
+	}
+	text_data(text_data& ref){
+		*this=ref;
 	}
 	text_data(text_data* pp){
 		m_parent=pp;
@@ -78,9 +148,6 @@ public:
 			return false;
 		}
 		if(m_parent){
-			if(begin<m_parent->m_begin||m_end<end){
-				return false;
-			}
 			//重複チェック
 			map<wstring,text_data*>::iterator itr;
 			for(itr=m_parent->m_child.begin();itr!=m_parent->m_child.end();itr++){
@@ -93,7 +160,12 @@ public:
 		m_end=end;
 		return true;
 	}
+	void Get_Area_Datas(vector<draw_font_data>* res){
+		draw_font_data dfd;
 
+		res->push_back(dfd);
+	}
+	/*
 	HFONT GetFont(){
 		return m_hFont;
 	}
@@ -103,25 +175,61 @@ public:
 	int get_end(){
 		return m_end;
 	}
-	text_data* Get_Child(int index);
-
+	text_data& Get_Child(const wchar_t* index){
+		return *m_child[index];
+	}
+	text_data& Get_Child(int index){
+		map<wstring,text_data*>::iterator itr;
+		for(itr=m_child.begin();itr!=m_child.end();itr++){
+			if(index==0){
+				return *itr->second;
+			}
+			index--;
+		}
+	}
+	*/
 };
 
-class text_draw{
-public:
-	wstring m_text;
-	text_data m_data;
-	void Draw(HDC hdc){
-		wstring draw_str;
-		HFONT oldfont;
-		text_data * p_data;
-		oldfont=(HFONT)GetCurrentObject(hdc,OBJ_FONT);
+class td_datas{
+	struct td_data{
+		int begin,end;
+		HFONT hFont;
+		COLORREF back_color,text_color;
+	};
+	vector<td_data> data;
+};
 
-		SelectObject(hdc,m_data.GetFont());
-		delete m_data[TEXT("sss")];
-		draw_str.assign(m_data.get_begin(),m_data.get_end());
-		//DrawText(hdc,
+class text_draw:public text_data{
+private:
+	struct fc_data{
+		HFONT hFont;
+		COLORREF tx,bk;
+	};
+	wstring m_text;
+public:
+	text_data m_data;
+public:
+	void SetText(const wchar_t* text){
+		m_text.assign(text);
 	}
+	void Draw(HDC hdc){
+		SIZE tmp;
+		int width=0;
+		wstring draw_text;
+		vector<draw_font_data>dfd;
+		HFONT oldfont=(HFONT)GetCurrentObject(hdc,OBJ_FONT);
+		m_data.Get_Area_Datas(&dfd);
+
+		int i;
+		for(i=0;i<dfd.size();i++){
+			draw_text.assign(m_text,dfd[i].begin,dfd[i].end-dfd[i].begin);
+			SelectObject(hdc,dfd[i].hFont);
+			TextOut(hdc,width,0,draw_text.c_str(),draw_text.size());
+			GetTextExtentPoint32(hdc,draw_text.c_str(),draw_text.size(),&tmp);
+			width+=tmp.cx;
+		}
+	}
+
 };
 
 
@@ -134,22 +242,6 @@ class Text_Datas{
 };
 */
 
-struct area_data{
-private:
-	vector<pair<int,int>> m_area;
-	HFONT m_hFont;
-	COLORREF bk_color,text_color;
-
-public:
-	void Area_Set(int beg,int end);
-	void Area_Not(int,int);
-	void Area_Or(int,int);
-	void Area_And(int,int);
-	void SetFont(int,const wchar_t*,bool,bool,bool);
-	void SetFontDirect(LOGFONT*);
-	void SetColor(COLORREF,COLORREF);
-	void Draw(HDC);
-};
 
 class area_data_s{
 private:
