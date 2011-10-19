@@ -5,6 +5,8 @@
 #include <Windows.h>
 #include <vector>
 #include <map>
+#include <algorithm>
+#include <stack>
 
 using namespace std;
 
@@ -13,7 +15,6 @@ struct draw_font_data{
 	HFONT hFont;
 	COLORREF back,text;
 };
-
 class area_data{
 protected:
 public:
@@ -28,205 +29,96 @@ public:
 	void SetFont(int,const wchar_t*,bool,bool,bool);
 	void SetFontDirect(LOGFONT*);
 	void SetColor(COLORREF,COLORREF);
-	void Draw(HDC);
-};
-
-class area_root:public area_data{
-	wstring m_text;
-};
-
-class data:public area_data{
-private:
-	map<wstring,data*> m_child;
-public:
-	~data(){
-		map<wstring,data*>::iterator itr;
-		for(itr=m_child.begin();itr!=m_child.end();itr++){
-			delete itr->second;
-		}
-	}
-	data& operator [](const wchar_t* index){
-		return *m_child[index];
-	}
-	bool AddChild(const wchar_t* id_str){
-		if(m_child.count(id_str)!=0){
-			return false;
-		}
-		m_child.insert(pair<wstring,data*>(id_str,new data()));
-		return true;
-	}
-	void GetDrawData(vector<draw_font_data> res){
-		map<wstring,data*>::iterator itr;
-		for(itr=m_child.begin();itr!=m_child.end();itr++){
-			
-		}
-	}
-
-};
-
-
-
-
-class data_color{
-public:
-	int begin,end;
-	COLORREF m_txcol,m_bkcol;
-};
-
-class data_font{
-public:
-	int begin,end;
-	HFONT hFont;
-};
-
-struct text_data_struct{
-	int begin,end;
-	HFONT hFont;
-	COLORREF m_bk,color,m_text_color;
-	text_data_struct* parent;
-	map<wstring,text_data_struct*>child;
-};
-
-class text_data{
-protected:
-	int m_begin,m_end;
-	HFONT m_hFont;
-	COLORREF m_bk_color,m_text_color;
-
-	text_data* m_parent;
-	map<wstring,text_data*> m_child;
-public:
-	text_data(){
-		m_parent=NULL;
-	}
-	text_data(text_data& ref){
-		*this=ref;
-	}
-	text_data(text_data* pp){
-		m_parent=pp;
-	}
-	~text_data(){
-		map<wstring,text_data*>::iterator itr;
-		for(itr=m_child.begin();itr!=m_child.end();itr++){
-			delete itr->second;
-		}
-		m_child.clear();
-	}
-	text_data &operator[](const wchar_t* index){
-		return *m_child[index];
-	}
-
-	bool AddChild(const wchar_t* id_str){
-		if(m_child.count(id_str)!=0){
-			return false;
-		}
-		m_child.insert(pair<wstring,text_data*>(id_str,new text_data(this)));
-		return true;
-	}
-	
-	bool SetFont(int size,const wchar_t* name,bool italic,bool underline,bool strike){
-		LOGFONT lf;
-		memset(&lf,0,sizeof(LOGFONT));
-		lf.lfHeight=size;
-		lf.lfItalic=italic;
-		lf.lfUnderline=underline;
-		lf.lfStrikeOut=strike;
-		
-		lstrcpyn(lf.lfFaceName,name,sizeof(lf.lfFaceName)/sizeof(wchar_t));
-		m_hFont=CreateFontIndirect(&lf);
-		return true;
-	}
-	
-	bool SetColor(COLORREF text,COLORREF bk){
-		m_text_color=text;
-		m_bk_color=bk;
-		return true;
-	}
-
-	bool SetArea(int begin,int end){
-		if(end<=begin){
-			return false;
-		}
-		if(m_parent){
-			//重複チェック
-			map<wstring,text_data*>::iterator itr;
-			for(itr=m_parent->m_child.begin();itr!=m_parent->m_child.end();itr++){
-				if(itr->second->m_begin<end&&begin<itr->second->m_end){
-					return false;
+	void Area_Sort(){
+		int i,j;
+		for(i=0;i<m_area.size()-1;i++){
+			for(j=m_area.size();i<j;j--){
+				if(m_area[j].first<m_area[j-1].first){
+					swap(m_area[j],m_area[j-1]);
 				}
 			}
 		}
-		m_begin=begin;
-		m_end=end;
-		return true;
 	}
-	void Get_Area_Datas(vector<draw_font_data>* res){
-		draw_font_data dfd;
-
-		res->push_back(dfd);
-	}
-	/*
-	HFONT GetFont(){
-		return m_hFont;
-	}
-	int get_begin(){
-		return m_begin;
-	}
-	int get_end(){
-		return m_end;
-	}
-	text_data& Get_Child(const wchar_t* index){
-		return *m_child[index];
-	}
-	text_data& Get_Child(int index){
-		map<wstring,text_data*>::iterator itr;
-		for(itr=m_child.begin();itr!=m_child.end();itr++){
-			if(index==0){
-				return *itr->second;
-			}
-			index--;
-		}
-	}
-	*/
+	void Draw(HDC);
 };
 
-class td_datas{
-	struct td_data{
-		int begin,end;
-		HFONT hFont;
-		COLORREF back_color,text_color;
-	};
-	vector<td_data> data;
+class area_color:public area_data{
+public:
+	COLORREF m_back_color,m_text_color;
 };
 
-class text_draw:public text_data{
+class area_font:public area_data{
+	HFONT m_hFont;
+};
+
+
+class text_draw{
 private:
+public:
+	map<wstring,area_data> areas;
+	vector<draw_font_data> dfds;
 	struct fc_data{
 		HFONT hFont;
 		COLORREF tx,bk;
 	};
 	wstring m_text;
 public:
-	text_data m_data;
-public:
 	void SetText(const wchar_t* text){
 		m_text.assign(text);
 	}
+	void SetDFD(){
+		map<wstring,area_data>::iterator itr;
+		for(itr=areas.begin();itr!=areas.end();itr++){
+			draw_font_data dfd;
+			dfd.hFont=itr->second.m_hFont;
+			dfd.back=itr->second.bk_color;
+			dfd.text=itr->second.text_color;
+			int i;
+			for(i=0;i<itr->second.m_area.size();i++){
+				dfd.begin=itr->second.m_area[i].first;
+				dfd.end=itr->second.m_area[i].second;
+				dfds.push_back(dfd);
+			}
+		}
+	}
+	void Sort(){
+		int i,j;
+		for(i=0;i<dfds.size()-1;i++){
+			for(j=dfds.size()-1;i<j;j--){
+				if(dfds[j].begin<dfds[j-1].begin){
+					swap(dfds[j],dfds[j-1]);
+				}
+			}
+		}
+	}
 	void Draw(HDC hdc){
-		SIZE tmp;
-		int width=0;
+		int i,width=0;
 		wstring draw_text;
-		vector<draw_font_data>dfd;
-		HFONT oldfont=(HFONT)GetCurrentObject(hdc,OBJ_FONT);
-		m_data.Get_Area_Datas(&dfd);
+		SIZE tmp;
+		stack<draw_font_data> dfd_stack;
 
-		int i;
-		for(i=0;i<dfd.size();i++){
-			draw_text.assign(m_text,dfd[i].begin,dfd[i].end-dfd[i].begin);
-			SelectObject(hdc,dfd[i].hFont);
+		SetDFD();
+		Sort();
+		for(i=0;i<dfds.size()-1;i++){
+			dfd_stack.push(dfds[i]);
+			SelectObject(hdc,dfd_stack.top().hFont);
+
+			draw_text.assign(m_text,dfds[i].begin,min(dfds[i].end-dfds[i].begin,dfds[i+1].begin-dfds[i].begin));
 			TextOut(hdc,width,0,draw_text.c_str(),draw_text.size());
 			GetTextExtentPoint32(hdc,draw_text.c_str(),draw_text.size(),&tmp);
 			width+=tmp.cx;
+
+
+			if(0<(dfds[i+1].begin-dfds[i].end)){
+				dfd_stack.pop();
+				//SetTextColor(hdc,dfd_stack.top().text);
+				//SetBkColor(hdc,dfd_stack.top().back);
+				SelectObject(hdc,dfd_stack.top().hFont);
+				draw_text.assign(m_text,dfds[i].end,dfds[i+1].begin-dfds[i].end);
+				TextOut(hdc,width,0,draw_text.c_str(),draw_text.size());
+				GetTextExtentPoint32(hdc,draw_text.c_str(),draw_text.size(),&tmp);
+				width+=tmp.cx;
+			}
 		}
 	}
 

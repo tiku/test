@@ -297,7 +297,25 @@ LRESULT CALLBACK Main_Viewer::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp)
 	static DrawTemplate dt;
 	switch(msg){
 	case WM_CREATE:
+		return 0;
 		{
+			HDC hdc;
+			text_draw td;
+			area_data ad;
+			ad.Area_Set(20,30);
+			ad.Area_Not(24,26);
+			td.areas.insert(pair<wstring,area_data>(TEXT("a"),ad));
+			ad.Area_Set(1,5);
+			ad.Area_Not(1,2);
+			td.areas.insert(pair<wstring,area_data>(TEXT("b"),ad));
+			ad.Area_Set(43,49);
+			td.areas.insert(pair<wstring,area_data>(TEXT("c"),ad));
+			ad.Area_Set(32,35);
+			ad.Area_Or(37,40);
+			td.areas.insert(pair<wstring,area_data>(TEXT("d"),ad));
+			td.Draw(hdc);
+		}
+		/*{
 			text_draw td;
 			td.m_data.SetArea(0,15);
 			td.m_data.AddChild(TEXT("a"));
@@ -319,12 +337,36 @@ LRESULT CALLBACK Main_Viewer::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp)
 				ad[i].SetFont(30,TEXT("メイリオ"),true,true,true);
 			}
 			MessageBox(NULL,NULL,NULL,NULL);
-		}
+		}*/
 		return 0;
 	case WM_MOUSEMOVE:
 		return 0;
 	case WM_PAINT:
-		dt.Draw(hWnd);
+		//dt.Draw(hWnd);
+		{
+			text_draw td;
+			area_data ad;
+			td.SetText(TEXT("あいうえおかきくけこさしすせそたちつてと"));
+			ad.Area_Set(1,40);
+			td.areas.insert(pair<wstring,area_data>(TEXT("a"),ad));
+			td.areas[TEXT("a")].SetFont(30,TEXT("メイリオ"),false,false,false);
+			ad.Area_Set(3,6);
+			ad.Area_Or(37,39);
+			td.areas.insert(pair<wstring,area_data>(TEXT("b"),ad));
+			td.areas[TEXT("b")].SetFont(30,TEXT("メイリオ"),true,true,true);
+			ad.Area_Set(10,25);
+			td.areas.insert(pair<wstring,area_data>(TEXT("c"),ad));
+			td.areas[TEXT("c")].SetFont(24,TEXT("ＭＳゴシック"),false,true,false);
+			ad.Area_Set(13,18);
+			ad.Area_Or(20,22);
+			td.areas.insert(pair<wstring,area_data>(TEXT("d"),ad));
+			td.areas[TEXT("d")].SetFont(34,TEXT("ＭＳゴシック"),false,false,false);
+			HDC hdc;
+			PAINTSTRUCT ps;
+			hdc=BeginPaint(hWnd,&ps);
+			td.Draw(hdc);
+			EndPaint(hWnd,&ps);
+		}
 		return 0;
 	case WM_LBUTTONDOWN:
 		dt.Set(TEXT("TEXTETXETEHRH"));
@@ -333,7 +375,7 @@ LRESULT CALLBACK Main_Viewer::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp)
 	case WM_LBUTTONUP:
 		return 0;
 	case WM_SIZE:
-		MoveWindow(hWnd,0,0,400,400,TRUE);
+		MoveWindow(hWnd,0,0,900,900,TRUE);
 		return 0;
 	}
 	return DefWindowProc(hWnd,msg,wp,lp);
