@@ -297,73 +297,45 @@ LRESULT CALLBACK Main_Viewer::WindowProc(HWND hWnd,UINT msg,WPARAM wp,LPARAM lp)
 	static DrawTemplate dt;
 	switch(msg){
 	case WM_CREATE:
-		return 0;
 		{
-			HDC hdc;
-			text_draw td;
-			area_data ad;
-			ad.Area_Set(20,30);
-			ad.Area_Not(24,26);
-			td.areas.insert(pair<wstring,area_data>(TEXT("a"),ad));
-			ad.Area_Set(1,5);
-			ad.Area_Not(1,2);
-			td.areas.insert(pair<wstring,area_data>(TEXT("b"),ad));
-			ad.Area_Set(43,49);
-			td.areas.insert(pair<wstring,area_data>(TEXT("c"),ad));
-			ad.Area_Set(32,35);
-			ad.Area_Or(37,40);
-			td.areas.insert(pair<wstring,area_data>(TEXT("d"),ad));
-			td.Draw(hdc);
 		}
-		/*{
-			text_draw td;
-			td.m_data.SetArea(0,15);
-			td.m_data.AddChild(TEXT("a"));
-			td.m_data[TEXT("a")].SetArea(3,10);
-			td.m_data[TEXT("a")].SetFont(30,TEXT("メイリオ"),false,false,false);
-			td.m_data.AddChild(TEXT("b"));
-			td.m_data[TEXT("b")].SetArea(11,13);
-			td.m_data[TEXT("a")].AddChild(TEXT("c"));
-			td.m_data[TEXT("a")][TEXT("c")].SetArea(6,8);
-			PAINTSTRUCT ps;
-			HDC hdc=BeginPaint(hWnd,&ps);
-			td.Draw(hdc);
-			MessageBox(NULL,NULL,NULL,NULL);
-		}
-		{
-			area_data ad[10000];
-			int i=0;
-			for(i=0;i<10000;i++){
-				ad[i].SetFont(30,TEXT("メイリオ"),true,true,true);
-			}
-			MessageBox(NULL,NULL,NULL,NULL);
-		}*/
 		return 0;
 	case WM_MOUSEMOVE:
 		return 0;
 	case WM_PAINT:
 		//dt.Draw(hWnd);
 		{
-			text_draw td;
-			area_data ad;
-			td.SetText(TEXT("あいうえおかきくけこさしすせそたちつてと"));
-			ad.Area_Set(1,40);
-			td.areas.insert(pair<wstring,area_data>(TEXT("a"),ad));
-			td.areas[TEXT("a")].SetFont(30,TEXT("メイリオ"),false,false,false);
-			ad.Area_Set(3,6);
-			ad.Area_Or(37,39);
-			td.areas.insert(pair<wstring,area_data>(TEXT("b"),ad));
-			td.areas[TEXT("b")].SetFont(30,TEXT("メイリオ"),true,true,true);
-			ad.Area_Set(10,25);
-			td.areas.insert(pair<wstring,area_data>(TEXT("c"),ad));
-			td.areas[TEXT("c")].SetFont(24,TEXT("ＭＳゴシック"),false,true,false);
-			ad.Area_Set(13,18);
-			ad.Area_Or(20,22);
-			td.areas.insert(pair<wstring,area_data>(TEXT("d"),ad));
-			td.areas[TEXT("d")].SetFont(34,TEXT("ＭＳゴシック"),false,false,false);
 			HDC hdc;
 			PAINTSTRUCT ps;
 			hdc=BeginPaint(hWnd,&ps);
+			text_draw td;
+			td.m_text=TEXT("あいうえおかきくけこさしすせそたちつてと");
+			LOGFONT lf;
+			memset(&lf,0,sizeof(LOGFONT));
+			lf.lfHeight=30;
+			lstrcpy(lf.lfFaceName,TEXT("ＭＳゴシック"));
+			text_draw::area_gui tmp;
+			tmp.area.begin=0;
+			tmp.area.end=20;
+			tmp.hFont=CreateFontIndirect(&lf);
+			td.area_and_font.push_back(tmp);
+			tmp.area.begin=3;
+			tmp.area.end=10;
+			lstrcpy(lf.lfFaceName,TEXT("メイリオ"));
+			tmp.hFont=CreateFontIndirect(&lf);
+			td.area_and_font.push_back(tmp);
+			tmp.area.begin=5;
+			tmp.area.end=7;
+			lf.lfUnderline=1;
+			lstrcpy(lf.lfFaceName,TEXT("メイリオ"));
+			tmp.hFont=CreateFontIndirect(&lf);
+			td.area_and_font.push_back(tmp);
+			tmp.area.begin=12;
+			tmp.area.end=18;
+			lf.lfItalic=true;
+			lstrcpy(lf.lfFaceName,TEXT("メイリオ"));
+			tmp.hFont=CreateFontIndirect(&lf);
+			td.area_and_font.push_back(tmp);
 			td.Draw(hdc);
 			EndPaint(hWnd,&ps);
 		}
